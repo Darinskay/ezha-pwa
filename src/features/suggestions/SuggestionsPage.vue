@@ -5,6 +5,7 @@ import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import Input from "@/components/ui/Input.vue";
 import SelectField from "@/components/ui/SelectField.vue";
+import Separator from "@/components/ui/Separator.vue";
 import Textarea from "@/components/ui/Textarea.vue";
 import { EXAMPLE_TARGETS, remainingMacros, toMacroTotals } from "@/lib/macros";
 import { aiSuggestionService } from "@/services/ai-suggestion-service";
@@ -170,71 +171,69 @@ const refreshContext = async (): Promise<void> => {
 </script>
 
 <template>
-  <section class="space-y-4 p-4 md:p-6">
-    <header class="space-y-1">
-      <h1 class="text-2xl font-semibold">Suggestions</h1>
-      <p class="text-sm text-muted-foreground">AI meal ideas based on your remaining macros.</p>
+  <section class="app-page">
+    <header class="page-header">
+      <h1 class="page-title">Suggestions</h1>
+      <p class="page-subtitle">AI meal ideas based on your remaining macros.</p>
     </header>
 
-    <Card class="space-y-3 p-4">
-      <div class="grid grid-cols-2 gap-3 text-sm">
-        <div>
-          <p class="text-muted-foreground">Calories</p>
-          <p class="text-lg font-semibold">{{ contextData?.remaining.calories ?? 0 }} kcal</p>
+    <Card class="glass space-y-4 p-4 sm:p-5">
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div class="stat-chip">
+          <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Calories</p>
+          <p class="mt-1 text-lg font-semibold">{{ contextData?.remaining.calories ?? 0 }} kcal</p>
         </div>
-        <div>
-          <p class="text-muted-foreground">Protein</p>
-          <p class="text-lg font-semibold">{{ contextData?.remaining.protein ?? 0 }} g</p>
+        <div class="stat-chip">
+          <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Protein</p>
+          <p class="mt-1 text-lg font-semibold">{{ contextData?.remaining.protein ?? 0 }} g</p>
         </div>
-        <div>
-          <p class="text-muted-foreground">Carbs</p>
-          <p class="text-lg font-semibold">{{ contextData?.remaining.carbs ?? 0 }} g</p>
+        <div class="stat-chip">
+          <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Carbs</p>
+          <p class="mt-1 text-lg font-semibold">{{ contextData?.remaining.carbs ?? 0 }} g</p>
         </div>
-        <div>
-          <p class="text-muted-foreground">Fat</p>
-          <p class="text-lg font-semibold">{{ contextData?.remaining.fat ?? 0 }} g</p>
+        <div class="stat-chip">
+          <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Fat</p>
+          <p class="mt-1 text-lg font-semibold">{{ contextData?.remaining.fat ?? 0 }} g</p>
         </div>
       </div>
 
       <p
         v-if="contextData && contextData.targets.calories === 0 && contextData.targets.protein === 0 && contextData.targets.carbs === 0 && contextData.targets.fat === 0"
-        class="text-sm text-muted-foreground"
+        class="rounded-xl border border-border/80 bg-background/80 px-3 py-2 text-sm text-muted-foreground"
       >
         Set your daily targets in Settings for better suggestions.
       </p>
 
-      <p v-if="contextError" class="text-sm text-destructive">
+      <p v-if="contextError" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
         {{ contextError.message }}
       </p>
+
+      <Separator />
 
       <Button variant="ghost" size="sm" @click="refreshContext">Refresh context</Button>
     </Card>
 
-    <Card class="space-y-3 p-4">
+    <Card class="space-y-4 p-4 sm:p-5">
       <div class="grid gap-3 sm:grid-cols-2">
         <div class="space-y-1">
-          <label class="text-xs font-medium">Meal type</label>
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Meal type</label>
           <SelectField v-model="mealType">
             <option value="Meal">Meal</option>
             <option value="Snack">Snack</option>
           </SelectField>
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium">Max prep time (1-240)</label>
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Max prep time (1-240)</label>
           <Input v-model="maxPrepTimeMinutes" type="number" min="1" max="240" />
         </div>
       </div>
 
       <div class="space-y-1">
-        <label class="text-xs font-medium">Ingredient notes</label>
-        <Textarea
-          v-model="ingredientNotes"
-          :rows="3"
-          placeholder="Example: no peanuts, add berries"
-        />
+        <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Ingredient notes</label>
+        <Textarea v-model="ingredientNotes" :rows="3" placeholder="Example: no peanuts, add berries" />
       </div>
 
-      <div class="flex flex-wrap gap-2">
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Button :loading="fetchSuggestionsMutation.isPending.value" @click="requestSuggestions()">
           Get suggestions
         </Button>
@@ -249,21 +248,28 @@ const refreshContext = async (): Promise<void> => {
         </Button>
       </div>
 
-      <p v-if="suggestionError" class="text-sm text-destructive">{{ suggestionError }}</p>
+      <p v-if="suggestionError" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        {{ suggestionError }}
+      </p>
     </Card>
 
     <div class="space-y-3">
-      <Card v-if="!suggestions.length" class="p-4 text-sm text-muted-foreground">
+      <Card v-if="!suggestions.length" class="rounded-2xl border-dashed p-4 text-sm text-muted-foreground">
         No suggestions yet. Fill the form and tap Get suggestions.
       </Card>
 
-      <Card v-for="suggestion in suggestions" :key="suggestion.id" class="space-y-2 p-4">
-        <h3 class="font-semibold">{{ suggestion.title }}</h3>
+      <Card v-for="suggestion in suggestions" :key="suggestion.id" class="space-y-3 p-4 sm:p-5">
+        <div class="flex items-start justify-between gap-3">
+          <h3 class="text-base font-semibold">{{ suggestion.title }}</h3>
+          <span class="rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+            {{ suggestion.calories }} kcal
+          </span>
+        </div>
         <p class="text-sm text-muted-foreground">{{ suggestion.description }}</p>
-        <p class="text-xs text-muted-foreground">
-          {{ suggestion.calories }} kcal · P{{ suggestion.protein }}g · C{{ suggestion.carbs }}g · F{{ suggestion.fat }}g
+        <p class="rounded-xl border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+          P{{ suggestion.protein }}g · C{{ suggestion.carbs }}g · F{{ suggestion.fat }}g
         </p>
-        <p v-if="suggestion.warning" class="text-xs text-destructive">{{ suggestion.warning }}</p>
+        <p v-if="suggestion.warning" class="text-xs font-medium text-destructive">{{ suggestion.warning }}</p>
         <p v-if="suggestion.notes" class="text-xs text-muted-foreground">{{ suggestion.notes }}</p>
       </Card>
     </div>

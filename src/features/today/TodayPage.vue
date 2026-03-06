@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import SelectField from "@/components/ui/SelectField.vue";
+import Separator from "@/components/ui/Separator.vue";
 import MacroProgressTable from "@/components/MacroProgressTable.vue";
 import FoodEntryCard from "@/components/FoodEntryCard.vue";
 import { addDays, nowDateKey, parseDateKey, toDateKey } from "@/lib/date";
@@ -187,70 +188,87 @@ const deleteEntry = async (entryId: string): Promise<void> => {
 </script>
 
 <template>
-  <section class="space-y-4 p-4 md:p-6">
-    <header class="space-y-1">
-      <h1 class="text-2xl font-semibold">{{ title }}</h1>
-      <p class="text-sm text-muted-foreground">
-        Track your active day and roll over when you are done.
-      </p>
+  <section class="app-page">
+    <header class="page-header">
+      <h1 class="page-title">{{ title }}</h1>
+      <p class="page-subtitle">Track your active day and roll over when you are done.</p>
     </header>
 
-    <Card class="space-y-3 p-4">
+    <Card class="glass space-y-4 p-4 sm:p-5">
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div class="stat-chip">
+          <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Calories Left</p>
+          <p class="mt-1 text-lg font-semibold">
+            {{ Math.max((todayData?.targets.calories ?? 0) - (todayData?.totals.calories ?? 0), 0) }}
+          </p>
+        </div>
+        <div class="stat-chip">
+          <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Protein Left</p>
+          <p class="mt-1 text-lg font-semibold">
+            {{ Math.max((todayData?.targets.protein ?? 0) - (todayData?.totals.protein ?? 0), 0) }}g
+          </p>
+        </div>
+        <div class="stat-chip">
+          <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Carbs Left</p>
+          <p class="mt-1 text-lg font-semibold">
+            {{ Math.max((todayData?.targets.carbs ?? 0) - (todayData?.totals.carbs ?? 0), 0) }}g
+          </p>
+        </div>
+        <div class="stat-chip">
+          <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Fat Left</p>
+          <p class="mt-1 text-lg font-semibold">
+            {{ Math.max((todayData?.targets.fat ?? 0) - (todayData?.totals.fat ?? 0), 0) }}g
+          </p>
+        </div>
+      </div>
+
+      <Separator />
+
       <MacroProgressTable
         :targets="todayData?.targets ?? EXAMPLE_TARGETS"
         :eaten="todayData?.totals ?? { calories: 0, protein: 0, carbs: 0, fat: 0 }"
       />
 
-      <p v-if="todayError" class="text-sm text-destructive">
+      <p v-if="todayError" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
         {{ todayError.message }}
       </p>
     </Card>
 
     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-      <Button :loading="todayQuery.isFetching.value" @click="openAddLog">Log your Meal</Button>
-      <Button
-        variant="outline"
-        :loading="startNewDayMutation.isPending.value"
-        @click="startNewDay"
-      >
+      <Button :loading="todayQuery.isFetching.value" @click="openAddLog">Log Meal</Button>
+      <Button variant="outline" :loading="startNewDayMutation.isPending.value" @click="startNewDay">
         Start New Day
       </Button>
     </div>
 
-    <Card v-if="showTargetChooser && todayData" class="space-y-3 p-4">
+    <Card v-if="showTargetChooser && todayData" class="space-y-3 p-4 sm:p-5">
       <h3 class="text-sm font-semibold">Choose target for next day</h3>
       <SelectField v-model="selectedTargetId">
-        <option
-          v-for="target in todayData.availableTargets"
-          :key="target.id"
-          :value="target.id"
-        >
+        <option v-for="target in todayData.availableTargets" :key="target.id" :value="target.id">
           {{ target.name }} · {{ Math.round(target.calories_target) }} kcal
         </option>
       </SelectField>
 
-      <div class="flex gap-2">
-        <Button class="flex-1" :loading="startNewDayMutation.isPending.value" @click="confirmStartNewDay">
-          Confirm
-        </Button>
-        <Button variant="ghost" class="flex-1" @click="showTargetChooser = false">Cancel</Button>
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <Button :loading="startNewDayMutation.isPending.value" @click="confirmStartNewDay">Confirm</Button>
+        <Button variant="ghost" @click="showTargetChooser = false">Cancel</Button>
       </div>
     </Card>
 
-    <Card class="p-4">
-      <div class="mb-3 flex items-center justify-between">
+    <Card class="space-y-3 p-4 sm:p-5">
+      <div class="flex items-center justify-between gap-3">
         <h2 class="text-lg font-semibold">Today&apos;s Progress</h2>
-        <span class="text-xs text-muted-foreground">
+        <span class="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
           {{ todayData?.entriesWithItems.length ?? 0 }} entries
         </span>
       </div>
 
-      <div v-if="todayQuery.isPending.value" class="py-8 text-center text-sm text-muted-foreground">
+      <div v-if="todayQuery.isPending.value" class="rounded-xl border border-dashed border-border/80 py-8 text-center text-sm text-muted-foreground">
         Loading today data...
       </div>
       <div
         v-else-if="!todayData?.entriesWithItems.length"
-        class="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground"
+        class="rounded-xl border border-dashed border-border/80 p-6 text-center text-sm text-muted-foreground"
       >
         No items yet.
       </div>
@@ -264,7 +282,7 @@ const deleteEntry = async (entryId: string): Promise<void> => {
             :loading="deleteEntryMutation.isPending.value"
             @click="deleteEntry(entry.entry.id)"
           >
-            Delete
+            Delete entry
           </Button>
         </div>
       </div>

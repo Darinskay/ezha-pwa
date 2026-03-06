@@ -46,42 +46,44 @@ const save = (): void => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
-    <Card class="w-full max-w-lg space-y-4 p-4">
+  <div class="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4 backdrop-blur-sm">
+    <Card class="w-full max-w-lg space-y-4 border-border/80 bg-card/96 p-4 sm:p-5">
       <div class="flex items-center justify-between">
         <h3 class="text-lg font-semibold">{{ target ? "Edit Target" : "New Target" }}</h3>
         <Button variant="ghost" size="sm" @click="emit('close')">Close</Button>
       </div>
 
       <div class="space-y-2">
-        <label class="text-xs font-medium">Name</label>
+        <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Name</label>
         <Input v-model="name" placeholder="e.g. Basic" />
       </div>
 
       <div class="grid grid-cols-2 gap-2">
         <div class="space-y-1">
-          <label class="text-xs font-medium">Calories</label>
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Calories</label>
           <Input v-model="calories" type="number" min="0" step="1" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium">Protein (g)</label>
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Protein (g)</label>
           <Input v-model="protein" type="number" min="0" step="1" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium">Carbs (g)</label>
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Carbs (g)</label>
           <Input v-model="carbs" type="number" min="0" step="1" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium">Fat (g)</label>
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Fat (g)</label>
           <Input v-model="fat" type="number" min="0" step="1" />
         </div>
       </div>
 
-      <p v-if="errorMessage" class="text-sm text-destructive">{{ errorMessage }}</p>
+      <p v-if="errorMessage" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        {{ errorMessage }}
+      </p>
 
-      <div class="flex gap-2">
-        <Button class="flex-1" @click="save">Save</Button>
-        <Button variant="ghost" class="flex-1" @click="emit('close')">Cancel</Button>
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <Button @click="save">Save</Button>
+        <Button variant="ghost" @click="emit('close')">Cancel</Button>
       </div>
     </Card>
   </div>

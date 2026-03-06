@@ -40,16 +40,16 @@ const createdLabel = computed(() => {
 </script>
 
 <template>
-  <article class="space-y-2 rounded-lg border border-border bg-card p-4">
+  <article class="space-y-3 rounded-2xl border border-border/80 bg-card/85 p-4">
     <div class="flex items-start justify-between gap-4">
       <div>
-        <h4 class="font-medium">
+        <h4 class="text-base font-semibold">
           {{ entryWithItems.entry.input_text?.trim() || "Meal" }}
         </h4>
         <p class="text-xs text-muted-foreground">{{ createdLabel }}</p>
       </div>
       <div class="text-right">
-        <p class="text-lg font-semibold">{{ Math.round(entryWithItems.entry.calories) }}</p>
+        <p class="text-xl font-semibold leading-none">{{ Math.round(entryWithItems.entry.calories) }}</p>
         <p class="text-xs text-muted-foreground">kcal</p>
       </div>
     </div>
@@ -64,7 +64,7 @@ const createdLabel = computed(() => {
 
     <button
       v-if="showExpand && entryWithItems.items.length > 0"
-      class="text-xs text-primary"
+      class="inline-flex rounded-full border border-border/70 bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-muted/70"
       @click="expanded = !expanded"
     >
       {{ expanded ? "Hide details" : "Show details" }}
@@ -74,7 +74,7 @@ const createdLabel = computed(() => {
       <li
         v-for="item in entryWithItems.items"
         :key="item.id"
-        class="rounded-md bg-muted px-3 py-2 text-sm"
+        class="rounded-xl border border-border/70 bg-muted/45 px-3 py-2 text-sm"
       >
         <div class="flex items-center justify-between">
           <span class="font-medium">{{ item.name }}</span>

@@ -97,22 +97,22 @@ const percent = (value: number, target: number): number => {
 </script>
 
 <template>
-  <section class="space-y-4 p-4 md:p-6">
-    <header class="space-y-1">
-      <h1 class="text-2xl font-semibold">History</h1>
-      <p class="text-sm text-muted-foreground">Previous completed days (up to last 60 days).</p>
+  <section class="app-page">
+    <header class="page-header">
+      <h1 class="page-title">History</h1>
+      <p class="page-subtitle">Previous completed days (up to last 60 days).</p>
     </header>
 
-    <Card class="p-4">
-      <div v-if="historyQuery.isPending.value" class="py-8 text-center text-sm text-muted-foreground">
+    <Card class="space-y-3 p-4 sm:p-5">
+      <div v-if="historyQuery.isPending.value" class="rounded-xl border border-dashed border-border/80 py-8 text-center text-sm text-muted-foreground">
         Loading history...
       </div>
 
-      <p v-else-if="historyError" class="text-sm text-destructive">
+      <p v-else-if="historyError" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
         {{ historyError.message }}
       </p>
 
-      <div v-else-if="!historyData?.summaries.length" class="text-sm text-muted-foreground">
+      <div v-else-if="!historyData?.summaries.length" class="rounded-xl border border-dashed border-border/80 p-6 text-sm text-muted-foreground">
         No entries yet.
       </div>
 
@@ -120,17 +120,15 @@ const percent = (value: number, target: number): number => {
         <article
           v-for="(summary, index) in historyData?.summaries ?? []"
           :key="summary.date"
-          class="rounded-md border p-3"
+          class="rounded-2xl border border-border/70 bg-card/75 p-3.5"
         >
           <button class="w-full text-left" @click="toggleDate(summary.date)">
             <div class="flex items-center justify-between gap-3">
               <div>
                 <h3 class="font-semibold">{{ displayDate(summary.date) }}</h3>
-                <p v-if="summary.daily_target_name" class="text-xs text-muted-foreground">
-                  Target: {{ summary.daily_target_name }}
-                </p>
+                <p v-if="summary.daily_target_name" class="text-xs text-muted-foreground">Target: {{ summary.daily_target_name }}</p>
               </div>
-              <span class="text-xs text-muted-foreground">
+              <span class="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
                 {{ expandedDate === summary.date ? "Hide" : "Show" }}
               </span>
             </div>
@@ -153,14 +151,14 @@ const percent = (value: number, target: number): number => {
 
           <Button
             v-if="index === 0 && isActiveDateToday"
-            class="mt-3 w-full"
+            class="mt-3 w-full sm:w-auto"
             :loading="goToDateMutation.isPending.value"
             @click="goToDate(summary.date)"
           >
             Go to this date
           </Button>
 
-          <div v-if="expandedDate === summary.date" class="mt-3 space-y-2 border-t pt-3">
+          <div v-if="expandedDate === summary.date" class="mt-3 space-y-2 border-t border-border/70 pt-3">
             <p v-if="loadingDates.has(summary.date)" class="text-sm text-muted-foreground">Loading entries...</p>
             <p v-else-if="entryErrors[summary.date]" class="text-sm text-destructive">{{ entryErrors[summary.date] }}</p>
             <p

@@ -37,26 +37,35 @@ const continueWithGoogle = async (): Promise<void> => {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-gradient-to-b from-rose-50 to-white px-4 py-12">
-    <Card class="w-full max-w-md p-6">
+  <div class="flex min-h-screen items-center justify-center px-4 py-12">
+    <Card class="w-full max-w-md border-border/75 bg-card/92 p-6 shadow-[0_24px_55px_rgb(15_23_42_/_0.18)] backdrop-blur">
       <div class="space-y-2 text-center">
+        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Nutrition Assistant</p>
         <h1 class="text-3xl font-semibold tracking-tight">EZHA</h1>
         <p class="text-sm text-muted-foreground">
           Smarter meal logging with AI estimates you can edit.
         </p>
       </div>
 
-      <div class="mt-6 grid grid-cols-2 rounded-md bg-muted p-1">
+      <div class="mt-6 grid grid-cols-2 rounded-xl border border-border/70 bg-muted/80 p-1">
         <button
-          class="rounded-sm px-3 py-2 text-sm"
-          :class="isCreatingAccount ? 'bg-background font-medium shadow-sm' : 'text-muted-foreground'"
+          class="rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+          :class="
+            isCreatingAccount
+              ? 'bg-card text-foreground shadow-[0_8px_20px_rgb(15_23_42_/_0.12)]'
+              : 'text-muted-foreground hover:text-foreground'
+          "
           @click="isCreatingAccount = true"
         >
           Create
         </button>
         <button
-          class="rounded-sm px-3 py-2 text-sm"
-          :class="!isCreatingAccount ? 'bg-background font-medium shadow-sm' : 'text-muted-foreground'"
+          class="rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+          :class="
+            !isCreatingAccount
+              ? 'bg-card text-foreground shadow-[0_8px_20px_rgb(15_23_42_/_0.12)]'
+              : 'text-muted-foreground hover:text-foreground'
+          "
           @click="isCreatingAccount = false"
         >
           Log in
@@ -67,7 +76,7 @@ const continueWithGoogle = async (): Promise<void> => {
         <Input v-model="email" type="email" placeholder="Email" />
         <Input v-model="password" type="password" placeholder="Password" />
 
-        <p v-if="authStore.errorMessage" class="text-sm text-destructive">
+        <p v-if="authStore.errorMessage" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {{ authStore.errorMessage }}
         </p>
 
@@ -77,7 +86,7 @@ const continueWithGoogle = async (): Promise<void> => {
       </form>
 
       <Button
-        variant="secondary"
+        variant="outline"
         class="mt-3 w-full"
         :disabled="authStore.isLoading"
         @click="continueWithGoogle"

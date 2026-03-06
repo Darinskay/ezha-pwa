@@ -22,17 +22,20 @@ const props = withDefaults(
 
 const classes = computed(() =>
   cn(
-    "inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
-    props.variant === "default" && "bg-primary text-primary-foreground hover:opacity-90",
-    props.variant === "secondary" && "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-    props.variant === "ghost" && "hover:bg-muted",
+    "inline-flex shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold transition-all duration-200",
+    "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+    "disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none active:scale-[0.99]",
+    props.variant === "default" &&
+      "bg-primary text-primary-foreground shadow-[0_12px_28px_hsl(var(--primary)/0.3)] hover:brightness-105",
+    props.variant === "secondary" &&
+      "border border-border/70 bg-secondary/80 text-secondary-foreground hover:bg-secondary",
+    props.variant === "ghost" && "text-foreground hover:bg-muted/70",
     props.variant === "destructive" &&
-      "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-    props.variant === "outline" && "border border-border bg-background hover:bg-muted",
-    props.size === "sm" && "h-8 px-3",
-    props.size === "md" && "h-10 px-4",
-    props.size === "lg" && "h-12 px-5",
+      "bg-destructive text-destructive-foreground shadow-[0_12px_24px_hsl(var(--destructive)/0.22)] hover:brightness-110",
+    props.variant === "outline" && "border border-border/80 bg-card/70 hover:bg-muted/65",
+    props.size === "sm" && "h-9 px-3.5 text-xs",
+    props.size === "md" && "h-11 px-4",
+    props.size === "lg" && "h-12 px-5 text-base",
     props.class
   )
 );

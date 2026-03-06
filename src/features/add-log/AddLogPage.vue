@@ -915,22 +915,22 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="space-y-4 p-4 md:p-6">
+  <section class="app-page">
     <header class="flex items-start justify-between gap-3">
-      <div class="space-y-1">
-        <h1 class="text-2xl font-semibold">
+      <div class="page-header">
+        <h1 class="page-title">
           {{ mode === "log" ? "Add Log" : "Add Food" }}
         </h1>
-        <p class="text-sm text-muted-foreground">
+        <p class="page-subtitle">
           {{ mode === "log" ? "Log with AI, photo, or saved library items." : "Save foods to your library." }}
         </p>
       </div>
-      <Button variant="ghost" @click="router.back()">Close</Button>
+      <Button variant="ghost" size="sm" @click="router.back()">Close</Button>
     </header>
 
-    <Card class="space-y-4 p-4">
+    <Card class="glass space-y-4 p-4 sm:p-5">
       <div class="space-y-2">
-        <label class="text-xs font-medium">Quick library pick</label>
+        <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Quick library pick</label>
         <SelectField v-model="selectedLibraryFoodId">
           <option value="">Choose a saved food...</option>
           <option v-for="food in savedFoodsQuery.data.value ?? []" :key="food.id" :value="food.id">
@@ -939,10 +939,10 @@ onUnmounted(() => {
         </SelectField>
       </div>
 
-      <div v-if="selectedLibraryFood" class="space-y-2 rounded-md border p-3">
-        <p class="text-sm font-medium">Selected: {{ selectedLibraryFood.name }}</p>
+      <div v-if="selectedLibraryFood" class="space-y-2 rounded-2xl border border-border/70 bg-background/80 p-3">
+        <p class="text-sm font-semibold">Selected: {{ selectedLibraryFood.name }}</p>
         <Input v-model="libraryFoodQuantityText" type="number" min="0" step="0.1" placeholder="Grams" />
-        <p v-if="libraryCalculatedMacros" class="text-xs text-muted-foreground">
+        <p v-if="libraryCalculatedMacros" class="rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           {{ formatMacro(libraryCalculatedMacros.calories, 1) }} kcal ·
           P{{ formatMacro(libraryCalculatedMacros.protein, 1) }} ·
           C{{ formatMacro(libraryCalculatedMacros.carbs, 1) }} ·
@@ -951,13 +951,19 @@ onUnmounted(() => {
       </div>
     </Card>
 
-    <Card v-if="mode === 'library'" class="space-y-4 p-4">
+    <Card v-if="mode === 'library'" class="space-y-4 p-4 sm:p-5">
       <TabsRoot v-model="libraryEntryMode">
-        <TabsList class="inline-flex rounded-md bg-muted p-1">
-          <TabsTrigger value="photo" class="rounded-sm px-3 py-1.5 text-sm data-[state=active]:bg-background">
+        <TabsList class="inline-flex rounded-xl border border-border/70 bg-muted/70 p-1">
+          <TabsTrigger
+            value="photo"
+            class="rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors data-[state=active]:bg-card data-[state=active]:text-foreground"
+          >
             Photo
           </TabsTrigger>
-          <TabsTrigger value="manual" class="rounded-sm px-3 py-1.5 text-sm data-[state=active]:bg-background">
+          <TabsTrigger
+            value="manual"
+            class="rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors data-[state=active]:bg-card data-[state=active]:text-foreground"
+          >
             Manual
           </TabsTrigger>
         </TabsList>
@@ -965,13 +971,13 @@ onUnmounted(() => {
 
         <TabsContent value="manual" class="mt-4 space-y-3">
           <div class="space-y-1">
-            <label class="text-xs font-medium">Food name</label>
+            <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Food name</label>
             <Input v-model="libraryName" placeholder="e.g. Apple" />
           </div>
 
-          <div class="grid grid-cols-2 gap-2">
+          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div class="space-y-1">
-              <label class="text-xs font-medium">Unit type</label>
+              <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Unit type</label>
               <SelectField v-model="manualUnitType">
                 <option value="per_100g">Per 100g</option>
                 <option value="per_serving">Per serving</option>
@@ -980,11 +986,11 @@ onUnmounted(() => {
 
             <template v-if="manualUnitType === 'per_serving'">
               <div class="space-y-1">
-                <label class="text-xs font-medium">Serving grams</label>
+                <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Serving grams</label>
                 <Input v-model="manualServingSizeText" type="number" min="0" step="0.1" />
               </div>
               <div class="space-y-1">
-                <label class="text-xs font-medium">Serving unit</label>
+                <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Serving unit</label>
                 <Input v-model="manualServingUnit" />
               </div>
             </template>
@@ -997,25 +1003,34 @@ onUnmounted(() => {
             <Input v-model="manualFatText" type="number" min="0" step="0.1" placeholder="Fat" />
           </div>
 
-          <p v-if="manualPerServingPreview && manualUnitType === 'per_serving'" class="text-xs text-muted-foreground">
+          <p
+            v-if="manualPerServingPreview && manualUnitType === 'per_serving'"
+            class="rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+          >
             Per serving: {{ formatMacro(manualPerServingPreview.calories, 1) }} kcal ·
             P{{ formatMacro(manualPerServingPreview.protein, 1) }} ·
             C{{ formatMacro(manualPerServingPreview.carbs, 1) }} ·
             F{{ formatMacro(manualPerServingPreview.fat, 1) }}
           </p>
 
-          <Button :loading="isSaving" @click="saveManualLibrary">Save to Library</Button>
+          <Button class="w-full sm:w-auto" :loading="isSaving" @click="saveManualLibrary">Save to Library</Button>
         </TabsContent>
       </TabsRoot>
     </Card>
 
-    <Card v-if="!selectedLibraryFood && (mode === 'log' || libraryEntryMode === 'photo')" class="space-y-4 p-4">
+    <Card v-if="!selectedLibraryFood && (mode === 'log' || libraryEntryMode === 'photo')" class="space-y-4 p-4 sm:p-5">
       <TabsRoot v-model="entryMode">
-        <TabsList class="inline-flex rounded-md bg-muted p-1">
-          <TabsTrigger value="description" class="rounded-sm px-3 py-1.5 text-sm data-[state=active]:bg-background">
+        <TabsList class="inline-flex rounded-xl border border-border/70 bg-muted/70 p-1">
+          <TabsTrigger
+            value="description"
+            class="rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors data-[state=active]:bg-card data-[state=active]:text-foreground"
+          >
             Description
           </TabsTrigger>
-          <TabsTrigger value="list" class="rounded-sm px-3 py-1.5 text-sm data-[state=active]:bg-background">
+          <TabsTrigger
+            value="list"
+            class="rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors data-[state=active]:bg-card data-[state=active]:text-foreground"
+          >
             List
           </TabsTrigger>
         </TabsList>
@@ -1032,7 +1047,7 @@ onUnmounted(() => {
         </TabsContent>
 
         <TabsContent value="list" class="mt-4 space-y-2">
-          <article v-for="item in items" :key="item.id" class="grid grid-cols-12 gap-2">
+          <article v-for="item in items" :key="item.id" class="grid grid-cols-12 gap-2 rounded-xl border border-border/70 bg-background/80 p-2">
             <Input v-model="item.name" class="col-span-7" placeholder="Food name" />
             <Input v-model="item.gramsText" class="col-span-4" type="number" min="0" step="0.1" placeholder="g" />
             <Button variant="ghost" class="col-span-1 px-0" @click="removeItemRow(item.id)">×</Button>
@@ -1042,18 +1057,23 @@ onUnmounted(() => {
       </TabsRoot>
 
       <div class="space-y-2">
-        <label class="text-xs font-medium">Photo (optional)</label>
-        <input type="file" accept="image/*" class="block w-full text-sm" @change="onFilePicked" />
+        <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Photo (optional)</label>
+        <input
+          type="file"
+          accept="image/*"
+          class="block w-full rounded-xl border border-border/70 bg-background/80 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-primary-foreground"
+          @change="onFilePicked"
+        />
         <img
           v-if="imagePreviewUrl"
           :src="imagePreviewUrl"
           alt="Selected meal photo"
-          class="max-h-56 w-full rounded-md border object-cover"
+          class="max-h-56 w-full rounded-xl border border-border/80 object-cover"
         />
-        <div class="flex gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <Button v-if="imagePreviewUrl" size="sm" variant="ghost" @click="clearImage">Remove photo</Button>
           <label v-if="imagePreviewUrl" class="inline-flex items-center gap-2 text-sm text-muted-foreground">
-            <input v-model="isLabelPhoto" type="checkbox" />
+            <input v-model="isLabelPhoto" type="checkbox" class="size-4 rounded border-border accent-primary" />
             This is a nutrition label
           </label>
         </div>
@@ -1068,10 +1088,10 @@ onUnmounted(() => {
         />
       </div>
 
-      <Button :loading="isAnalyzing" :disabled="!canAnalyze" @click="analyze">Analyze</Button>
+      <Button class="w-full sm:w-auto" :loading="isAnalyzing" :disabled="!canAnalyze" @click="analyze">Analyze</Button>
     </Card>
 
-    <Card v-if="estimate || selectedLibraryFood" class="space-y-4 p-4">
+    <Card v-if="estimate || selectedLibraryFood" class="space-y-4 p-4 sm:p-5">
       <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Input v-model="caloriesText" type="number" min="0" step="0.1" placeholder="Calories" />
         <Input v-model="proteinText" type="number" min="0" step="0.1" placeholder="Protein" />
@@ -1081,7 +1101,7 @@ onUnmounted(() => {
 
       <div v-if="mode === 'log'" class="space-y-2">
         <label class="inline-flex items-center gap-2 text-sm">
-          <input v-model="saveToLibrary" type="checkbox" />
+          <input v-model="saveToLibrary" type="checkbox" class="size-4 rounded border-border accent-primary" />
           Save to library after logging
         </label>
         <Input v-if="saveToLibrary" v-model="libraryName" placeholder="Library food name" />
@@ -1089,27 +1109,27 @@ onUnmounted(() => {
 
       <div v-if="mode === 'library'" class="space-y-2">
         <Input v-model="libraryName" placeholder="Food name for library" />
-        <Button :loading="isSaving" @click="saveLibraryFromEstimate">Save to Library</Button>
+        <Button class="w-full sm:w-auto" :loading="isSaving" @click="saveLibraryFromEstimate">Save to Library</Button>
       </div>
 
-      <Button v-if="mode === 'log'" :loading="isSaving" :disabled="!canSaveLog" @click="saveLogEntry">
+      <Button v-if="mode === 'log'" class="w-full sm:w-auto" :loading="isSaving" :disabled="!canSaveLog" @click="saveLogEntry">
         Save log
       </Button>
     </Card>
 
-    <p v-if="errorMessage" class="text-sm text-destructive">{{ errorMessage }}</p>
-    <p v-if="saveMessage" class="text-sm text-primary">{{ saveMessage }}</p>
+    <p v-if="errorMessage" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">{{ errorMessage }}</p>
+    <p v-if="saveMessage" class="rounded-xl border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary">{{ saveMessage }}</p>
 
-    <div v-if="pendingDuplicate" class="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
-      <Card class="w-full max-w-md space-y-4 p-4">
+    <div v-if="pendingDuplicate" class="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4 backdrop-blur-sm">
+      <Card class="w-full max-w-md space-y-4 border-border/80 bg-card/96 p-4 sm:p-5">
         <h3 class="text-lg font-semibold">Food already exists</h3>
         <p class="text-sm text-muted-foreground">
           "{{ pendingDuplicate.existing.name }}" is already in your Library.
         </p>
-        <div class="flex gap-2">
-          <Button class="flex-1" @click="resolveDuplicate('update')">Update existing</Button>
-          <Button variant="secondary" class="flex-1" @click="resolveDuplicate('create')">Create new</Button>
-          <Button variant="ghost" class="flex-1" @click="pendingDuplicate = null">Cancel</Button>
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <Button @click="resolveDuplicate('update')">Update existing</Button>
+          <Button variant="secondary" @click="resolveDuplicate('create')">Create new</Button>
+          <Button variant="ghost" @click="pendingDuplicate = null">Cancel</Button>
         </div>
       </Card>
     </div>

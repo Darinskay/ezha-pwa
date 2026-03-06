@@ -265,8 +265,8 @@ const save = async (): Promise<void> => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
-    <Card class="max-h-[92vh] w-full max-w-2xl overflow-y-auto p-4">
+  <div class="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4 backdrop-blur-sm">
+    <Card class="max-h-[92vh] w-full max-w-2xl overflow-y-auto border-border/80 bg-card/96 p-4 sm:p-5">
       <div class="mb-4 flex items-center justify-between">
         <div>
           <h3 class="text-lg font-semibold">Log Meal</h3>
@@ -282,22 +282,22 @@ const save = async (): Promise<void> => {
           <article
             v-for="ingredient in ingredients"
             :key="ingredient.id"
-            class="space-y-2 rounded-md border p-3"
+            class="space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3"
           >
             <div class="flex items-start justify-between gap-2">
-              <h4 class="text-sm font-medium">{{ ingredient.name }}</h4>
+              <h4 class="text-sm font-semibold">{{ ingredient.name }}</h4>
               <Button variant="ghost" size="sm" @click="removeIngredient(ingredient.id)">Remove</Button>
             </div>
             <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Input v-model="ingredient.gramsText" type="number" min="0" step="0.1" placeholder="Grams" />
-              <p class="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+              <p class="rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                 {{ Math.round(buildScaledMacros(ingredient).calories) }} kcal · P{{ Math.round(buildScaledMacros(ingredient).protein) }} · C{{ Math.round(buildScaledMacros(ingredient).carbs) }} · F{{ Math.round(buildScaledMacros(ingredient).fat) }}
               </p>
             </div>
           </article>
         </div>
 
-        <div class="mt-4 space-y-2 rounded-md border p-3">
+        <div class="mt-4 space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3">
           <h4 class="text-sm font-semibold">Add ingredient</h4>
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <SelectField v-model="addIngredientFoodId">
@@ -310,18 +310,20 @@ const save = async (): Promise<void> => {
           </div>
         </div>
 
-        <div class="mt-4 rounded-md bg-muted p-3 text-sm">
+        <div class="mt-4 rounded-xl border border-border/70 bg-muted/40 p-3 text-sm">
           Total: {{ formatMacro(totals.calories, 1) }} kcal ·
           P{{ formatMacro(totals.protein, 1) }}g ·
           C{{ formatMacro(totals.carbs, 1) }}g ·
           F{{ formatMacro(totals.fat, 1) }}g
         </div>
 
-        <p v-if="errorMessage" class="mt-3 text-sm text-destructive">{{ errorMessage }}</p>
+        <p v-if="errorMessage" class="mt-3 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {{ errorMessage }}
+        </p>
 
-        <div class="mt-4 flex gap-2">
-          <Button class="flex-1" :loading="isSaving" :disabled="!canSave" @click="save">Save log</Button>
-          <Button variant="ghost" class="flex-1" @click="emit('close')">Cancel</Button>
+        <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <Button :loading="isSaving" :disabled="!canSave" @click="save">Save log</Button>
+          <Button variant="ghost" @click="emit('close')">Cancel</Button>
         </div>
       </template>
     </Card>

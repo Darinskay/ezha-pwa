@@ -79,30 +79,32 @@ const onMealSaved = async (): Promise<void> => {
 </script>
 
 <template>
-  <section class="space-y-4 p-4 md:p-6">
-    <header class="space-y-1">
-      <h1 class="text-2xl font-semibold">Library</h1>
-      <p class="text-sm text-muted-foreground">Save foods and meals for quick logging.</p>
+  <section class="app-page">
+    <header class="page-header">
+      <h1 class="page-title">Library</h1>
+      <p class="page-subtitle">Save foods and meals for quick logging.</p>
     </header>
 
-    <Card class="space-y-3 p-4">
-      <Button class="w-full" @click="openAddFood">Add food</Button>
+    <Card class="glass space-y-3 p-4 sm:p-5">
+      <Button class="w-full sm:w-auto" @click="openAddFood">Add food</Button>
       <Input v-model="searchText" placeholder="Search your library..." />
     </Card>
 
-    <Card class="p-4">
-      <div class="mb-3 flex items-center justify-between">
+    <Card class="space-y-3 p-4 sm:p-5">
+      <div class="flex items-center justify-between gap-3">
         <h2 class="text-lg font-semibold">Saved foods</h2>
-        <span class="text-xs text-muted-foreground">{{ filteredFoods.length }} items</span>
+        <span class="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+          {{ filteredFoods.length }} items
+        </span>
       </div>
 
-      <div v-if="foodsQuery.isPending.value" class="py-8 text-center text-sm text-muted-foreground">
+      <div v-if="foodsQuery.isPending.value" class="rounded-xl border border-dashed border-border/80 py-8 text-center text-sm text-muted-foreground">
         Loading...
       </div>
 
       <div
         v-else-if="filteredFoods.length === 0"
-        class="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground"
+        class="rounded-xl border border-dashed border-border/80 p-6 text-center text-sm text-muted-foreground"
       >
         No saved foods.
       </div>
@@ -111,33 +113,19 @@ const onMealSaved = async (): Promise<void> => {
         <article
           v-for="food in filteredFoods"
           :key="food.id"
-          class="flex items-center justify-between gap-3 rounded-md border p-3"
+          class="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/70 p-3 sm:flex-row sm:items-center sm:justify-between"
         >
-          <div>
-            <h3 class="font-medium">{{ food.name }}</h3>
+          <div class="space-y-1">
+            <h3 class="font-semibold">{{ food.name }}</h3>
             <p class="text-xs text-muted-foreground">
               {{ food.is_meal ? "Meal" : food.unit_type === "per_100g" ? "Per 100g" : "Per serving" }} ·
               {{ Math.round(food.calories_per_100g) }} kcal /100g
             </p>
           </div>
 
-          <div class="flex gap-1">
-            <Button
-              v-if="food.is_meal"
-              variant="secondary"
-              size="sm"
-              @click="loggingMeal = food"
-            >
-              Log
-            </Button>
-            <Button
-              v-else
-              variant="secondary"
-              size="sm"
-              @click="editingFood = food"
-            >
-              Edit
-            </Button>
+          <div class="grid grid-cols-2 gap-2 sm:flex sm:gap-1">
+            <Button v-if="food.is_meal" variant="secondary" size="sm" @click="loggingMeal = food">Log</Button>
+            <Button v-else variant="secondary" size="sm" @click="editingFood = food">Edit</Button>
             <Button
               variant="ghost"
               size="sm"
@@ -151,7 +139,7 @@ const onMealSaved = async (): Promise<void> => {
         </article>
       </div>
 
-      <p v-if="foodsQuery.error.value" class="mt-3 text-sm text-destructive">
+      <p v-if="foodsQuery.error.value" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
         {{ (foodsQuery.error.value as Error).message }}
       </p>
     </Card>

@@ -108,68 +108,73 @@ const save = (): void => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
-    <Card class="w-full max-w-xl space-y-4 p-4">
+  <div class="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4 backdrop-blur-sm">
+    <Card class="w-full max-w-xl space-y-4 border-border/80 bg-card/96 p-4 sm:p-5">
       <div class="flex items-center justify-between">
         <h3 class="text-lg font-semibold">{{ food ? "Edit Food" : "Add Food" }}</h3>
         <Button variant="ghost" size="sm" @click="emit('close')">Close</Button>
       </div>
 
       <div class="space-y-2">
-        <label class="text-xs font-medium">Food name</label>
+        <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Food name</label>
         <Input v-model="name" placeholder="Food name" />
       </div>
 
       <div class="space-y-2">
-        <label class="text-xs font-medium">Unit type</label>
+        <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Unit type</label>
         <SelectField v-model="unitType">
           <option value="per_100g">Per 100g</option>
           <option value="per_serving">Per serving</option>
         </SelectField>
       </div>
 
-      <div v-if="unitType === 'per_serving'" class="grid grid-cols-2 gap-2">
+      <div v-if="unitType === 'per_serving'" class="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div class="space-y-2">
-          <label class="text-xs font-medium">Serving grams</label>
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Serving grams</label>
           <Input v-model="servingSizeText" type="number" min="0" step="0.1" />
         </div>
         <div class="space-y-2">
-          <label class="text-xs font-medium">Serving unit</label>
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Serving unit</label>
           <Input v-model="servingUnit" placeholder="serving" />
         </div>
       </div>
 
       <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div class="space-y-1">
-          <label class="text-xs font-medium">Calories</label>
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Calories</label>
           <Input v-model="caloriesText" type="number" min="0" step="0.1" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium">Protein</label>
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Protein</label>
           <Input v-model="proteinText" type="number" min="0" step="0.1" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium">Carbs</label>
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Carbs</label>
           <Input v-model="carbsText" type="number" min="0" step="0.1" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium">Fat</label>
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Fat</label>
           <Input v-model="fatText" type="number" min="0" step="0.1" />
         </div>
       </div>
 
-      <p v-if="unitType === 'per_serving' && perServingPreview" class="rounded-md bg-muted p-2 text-xs text-muted-foreground">
+      <p
+        v-if="unitType === 'per_serving' && perServingPreview"
+        class="rounded-xl border border-border/70 bg-muted/40 p-2 text-xs text-muted-foreground"
+      >
         Per serving: {{ formatMacro(perServingPreview.calories, 1) }} kcal ·
         P{{ formatMacro(perServingPreview.protein, 1) }} ·
         C{{ formatMacro(perServingPreview.carbs, 1) }} ·
         F{{ formatMacro(perServingPreview.fat, 1) }}
       </p>
 
-      <p v-if="errorMessage" class="text-sm text-destructive">{{ errorMessage }}</p>
+      <p v-if="errorMessage" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        {{ errorMessage }}
+      </p>
 
-      <div class="flex gap-2">
-        <Button class="flex-1" :loading="saving" @click="save">Save</Button>
-        <Button variant="ghost" class="flex-1" @click="emit('close')">Cancel</Button>
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <Button :loading="saving" @click="save">Save</Button>
+        <Button variant="ghost" @click="emit('close')">Cancel</Button>
       </div>
     </Card>
   </div>

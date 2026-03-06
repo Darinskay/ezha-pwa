@@ -108,25 +108,25 @@ const sortedTargets = computed(() => targetsQuery.data.value ?? []);
 </script>
 
 <template>
-  <section class="space-y-4 p-4 md:p-6">
-    <header class="space-y-1">
-      <h1 class="text-2xl font-semibold">Settings</h1>
-      <p class="text-sm text-muted-foreground">Manage daily targets, appearance, and session.</p>
+  <section class="app-page">
+    <header class="page-header">
+      <h1 class="page-title">Settings</h1>
+      <p class="page-subtitle">Manage daily targets, appearance, and session.</p>
     </header>
 
-    <Card class="space-y-3 p-4">
-      <div class="flex items-center justify-between">
+    <Card class="space-y-3 p-4 sm:p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
         <h2 class="text-lg font-semibold">Daily Targets</h2>
         <Button size="sm" @click="openCreate">Add Target</Button>
       </div>
 
-      <div v-if="targetsQuery.isPending.value" class="py-8 text-center text-sm text-muted-foreground">
+      <div v-if="targetsQuery.isPending.value" class="rounded-xl border border-dashed border-border/80 py-8 text-center text-sm text-muted-foreground">
         Loading targets...
       </div>
 
       <div
         v-else-if="sortedTargets.length === 0"
-        class="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground"
+        class="rounded-xl border border-dashed border-border/80 p-6 text-center text-sm text-muted-foreground"
       >
         No targets yet.
       </div>
@@ -135,16 +135,16 @@ const sortedTargets = computed(() => targetsQuery.data.value ?? []);
         <article
           v-for="target in sortedTargets"
           :key="target.id"
-          class="flex items-center justify-between gap-3 rounded-md border p-3"
+          class="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/70 p-3 sm:flex-row sm:items-center sm:justify-between"
         >
           <div>
-            <h3 class="font-medium">{{ target.name }}</h3>
+            <h3 class="font-semibold">{{ target.name }}</h3>
             <p class="text-xs text-muted-foreground">
               {{ Math.round(target.calories_target) }} kcal · P{{ Math.round(target.protein_target) }}g · C{{ Math.round(target.carbs_target) }}g · F{{ Math.round(target.fat_target) }}g
             </p>
           </div>
 
-          <div class="flex gap-1">
+          <div class="grid grid-cols-2 gap-2 sm:flex sm:gap-1">
             <Button size="sm" variant="secondary" @click="openEdit(target)">Edit</Button>
             <Button
               size="sm"
@@ -159,33 +159,27 @@ const sortedTargets = computed(() => targetsQuery.data.value ?? []);
         </article>
       </div>
 
-      <p v-if="targetsQuery.error.value" class="text-sm text-destructive">
+      <p v-if="targetsQuery.error.value" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
         {{ (targetsQuery.error.value as Error).message }}
       </p>
-      <p v-if="deleteTargetMutation.error.value" class="text-sm text-destructive">
+      <p v-if="deleteTargetMutation.error.value" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
         {{ (deleteTargetMutation.error.value as Error).message }}
       </p>
-      <p v-if="saveMessage" class="text-sm text-primary">{{ saveMessage }}</p>
+      <p v-if="saveMessage" class="rounded-xl border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary">{{ saveMessage }}</p>
     </Card>
 
-    <Card class="space-y-3 p-4">
+    <Card class="space-y-3 p-4 sm:p-5">
       <h2 class="text-lg font-semibold">Appearance</h2>
       <SelectField v-model="settingsStore.appearance">
         <option value="system">System</option>
-        <option value="light">White</option>
+        <option value="light">Light</option>
         <option value="dark">Dark</option>
       </SelectField>
     </Card>
 
-    <Card class="space-y-3 p-4">
+    <Card class="space-y-3 p-4 sm:p-5">
       <h2 class="text-lg font-semibold">Session</h2>
-      <Button
-        variant="destructive"
-        :loading="authStore.isLoading"
-        @click="authStore.signOut"
-      >
-        Sign out
-      </Button>
+      <Button variant="destructive" :loading="authStore.isLoading" @click="authStore.signOut">Sign out</Button>
     </Card>
 
     <DailyTargetEditorDialog
