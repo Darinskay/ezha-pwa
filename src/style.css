@@ -1,0 +1,54 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 230 18% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 230 18% 12%;
+  --primary: 324 62% 48%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 230 18% 14%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 220 10% 46%;
+  --border: 220 20% 88%;
+  --input: 220 20% 88%;
+  --ring: 324 62% 48%;
+  --destructive: 0 74% 52%;
+  --destructive-foreground: 0 0% 98%;
+}
+
+.dark {
+  --background: 230 18% 10%;
+  --foreground: 210 20% 96%;
+  --card: 230 18% 12%;
+  --card-foreground: 210 20% 96%;
+  --primary: 324 74% 62%;
+  --primary-foreground: 230 18% 9%;
+  --secondary: 230 14% 20%;
+  --secondary-foreground: 210 20% 96%;
+  --muted: 230 14% 20%;
+  --muted-foreground: 220 10% 74%;
+  --border: 230 14% 24%;
+  --input: 230 14% 24%;
+  --ring: 324 74% 62%;
+  --destructive: 0 63% 45%;
+  --destructive-foreground: 0 0% 98%;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background font-sans text-foreground antialiased;
+  margin: 0;
+}
+
+#app {
+  min-height: 100vh;
+}
