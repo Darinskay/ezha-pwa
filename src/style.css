@@ -5,37 +5,37 @@
 @tailwind utilities;
 
 :root {
-  --background: 204 38% 97%;
-  --foreground: 224 32% 14%;
+  --background: 320 32% 98%;
+  --foreground: 228 24% 14%;
   --card: 0 0% 100%;
-  --card-foreground: 224 32% 14%;
-  --primary: 192 88% 38%;
+  --card-foreground: 228 24% 14%;
+  --primary: 320 60% 50%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 204 34% 92%;
-  --secondary-foreground: 225 24% 20%;
-  --muted: 204 30% 93%;
-  --muted-foreground: 220 10% 42%;
-  --border: 211 26% 84%;
-  --input: 211 26% 84%;
-  --ring: 192 88% 38%;
+  --secondary: 318 32% 94%;
+  --secondary-foreground: 320 24% 22%;
+  --muted: 320 24% 95%;
+  --muted-foreground: 320 10% 42%;
+  --border: 320 22% 85%;
+  --input: 320 22% 85%;
+  --ring: 320 62% 46%;
   --destructive: 0 74% 52%;
   --destructive-foreground: 0 0% 98%;
 }
 
 .dark {
-  --background: 218 28% 11%;
-  --foreground: 214 35% 94%;
-  --card: 220 29% 13%;
-  --card-foreground: 214 35% 94%;
-  --primary: 189 84% 52%;
-  --primary-foreground: 220 40% 10%;
-  --secondary: 220 20% 19%;
-  --secondary-foreground: 214 35% 94%;
-  --muted: 220 19% 20%;
-  --muted-foreground: 216 15% 72%;
-  --border: 220 19% 24%;
-  --input: 220 19% 24%;
-  --ring: 189 84% 52%;
+  --background: 319 20% 10%;
+  --foreground: 316 24% 94%;
+  --card: 318 19% 13%;
+  --card-foreground: 316 24% 94%;
+  --primary: 320 66% 60%;
+  --primary-foreground: 318 28% 11%;
+  --secondary: 318 15% 20%;
+  --secondary-foreground: 316 20% 93%;
+  --muted: 318 15% 22%;
+  --muted-foreground: 318 11% 72%;
+  --border: 318 14% 27%;
+  --input: 318 14% 27%;
+  --ring: 320 66% 60%;
   --destructive: 0 63% 45%;
   --destructive-foreground: 0 0% 98%;
 }
@@ -55,9 +55,16 @@ body {
   margin: 0;
   background-color: hsl(var(--background));
   background-image:
-    radial-gradient(circle at 0% 0%, hsl(var(--primary) / 0.12), transparent 28%),
-    radial-gradient(circle at 100% 0%, hsl(203 90% 52% / 0.1), transparent 24%),
-    radial-gradient(circle at 0% 100%, hsl(172 74% 41% / 0.08), transparent 26%);
+    radial-gradient(circle at 0% 0%, hsl(var(--primary) / 0.15), transparent 30%),
+    radial-gradient(circle at 100% 0%, hsl(283 70% 56% / 0.11), transparent 26%),
+    radial-gradient(circle at 0% 100%, hsl(16 88% 63% / 0.08), transparent 28%);
+}
+
+.dark body {
+  background-image:
+    radial-gradient(circle at 0% 0%, hsl(var(--primary) / 0.22), transparent 34%),
+    radial-gradient(circle at 100% 0%, hsl(272 70% 52% / 0.17), transparent 30%),
+    radial-gradient(circle at 0% 100%, hsl(338 72% 45% / 0.16), transparent 34%);
 }
 
 ::selection {
