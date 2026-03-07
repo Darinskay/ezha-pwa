@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { TabsContent, TabsIndicator, TabsList, TabsRoot, TabsTrigger } from "radix-vue";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
+import { useQuery, useQueryClient } from "@tanstack/vue-query";
 import { watchDebounced } from "@vueuse/core";
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
@@ -10,6 +10,15 @@ import Input from "@/components/ui/Input.vue";
 import SelectField from "@/components/ui/SelectField.vue";
 import Textarea from "@/components/ui/Textarea.vue";
 import { clearDraft, enqueueRetry, loadDraft, saveDraft } from "@/db/offline-db";
+import {
+  buildManualLibraryDraft,
+  buildPhotoLibraryDraft,
+  resolveDuplicateSaveChoice,
+  saveLibraryDraftWithDuplicateCheck,
+  suggestedLibraryNameFromInputs,
+  type DuplicateSaveChoice,
+  type PendingLibraryDuplicate
+} from "@/features/add-log/library-save-service";
 import { formatMacro, savedFoodMacrosForQuantity } from "@/lib/macros";
 import { parseNumberInput } from "@/lib/number";
 import { queryKeys } from "@/query/keys";
@@ -26,7 +35,6 @@ import type {
   FoodEntry,
   FoodEntryItem,
   MacroEstimate,
-  SavedFood,
   SavedFoodDraft
 } from "@/types/domain";
 
@@ -36,9 +44,7 @@ interface DraftItem {
   gramsText: string;
 }
 
-interface PendingDuplicate {
-  existing: SavedFood;
-  draft: SavedFoodDraft;
+interface PendingDuplicate extends PendingLibraryDuplicate {
   onResolved?: () => Promise<void>;
 }
 
@@ -54,6 +60,7 @@ interface AddLogDraft {
   fatText: string;
   saveToLibrary: boolean;
   libraryName: string;
+  hasUserEditedLibraryName: boolean;
   selectedLibraryFoodId: string;
   libraryFoodQuantityText: string;
   libraryEntryMode: "photo" | "manual";
@@ -99,6 +106,7 @@ const saveMessage = ref<string | null>(null);
 
 const saveToLibrary = ref(false);
 const libraryName = ref("");
+const hasUserEditedLibraryName = ref(false);
 const pendingDuplicate = ref<PendingDuplicate | null>(null);
 
 const selectedLibraryFoodId = ref("");
@@ -168,6 +176,9 @@ const hasPhotoInput = computed(() => !!selectedImageFile.value || !!pendingImage
 const canAnalyze = computed(() => {
   if (selectedLibraryFood.value) return false;
   if (isAnalyzing.value) return false;
+  if (mode.value === "library" && libraryEntryMode.value === "photo") {
+    return hasPhotoInput.value;
+  }
   return hasTextInput.value || hasPhotoInput.value;
 });
 
@@ -178,20 +189,25 @@ const canSaveLog = computed(() => {
   return !!estimate.value || (!!caloriesText.value && !!proteinText.value && !!carbsText.value && !!fatText.value);
 });
 
+const suggestedLibraryName = computed(() =>
+  suggestedLibraryNameFromInputs({
+    selectedLibraryFoodName: selectedLibraryFood.value?.name ?? null,
+    listItemNames: items.value.map((item) => item.name),
+    descriptionText: descriptionText.value,
+    aiFoodName: estimate.value?.foodName ?? null
+  })
+);
+
 const suggestedFoodName = (): string => {
-  if (selectedLibraryFood.value) return selectedLibraryFood.value.name;
-
-  const itemNames = items.value.map((item) => item.name.trim()).filter(Boolean);
-  if (itemNames.length) return itemNames.join(" + ");
-
-  if (descriptionText.value.trim()) return descriptionText.value.trim();
-
-  if (estimate.value?.foodName?.trim()) return estimate.value.foodName.trim();
-
-  return "Meal";
+  return suggestedLibraryName.value ?? "Meal";
 };
 
 const parseMacro = (value: string): number | null => parseNumberInput(value);
+
+const onLibraryNameInput = (nextName: string): void => {
+  hasUserEditedLibraryName.value = true;
+  libraryName.value = nextName;
+};
 
 const resolvedInputType = computed<"photo" | "text" | "photo+text">(() => {
   if (hasPhotoInput.value && hasTextInput.value) return "photo+text";
@@ -423,10 +439,6 @@ const analyze = async (): Promise<void> => {
     } else {
       labelBaseEstimate = null;
     }
-
-    if (!libraryName.value.trim()) {
-      libraryName.value = suggestedFoodName();
-    }
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "Analysis failed.";
   } finally {
@@ -435,72 +447,41 @@ const analyze = async (): Promise<void> => {
 };
 
 const buildLibraryDraft = (name: string): SavedFoodDraft | null => {
-  const trimmed = name.trim();
-  if (!trimmed) {
-    errorMessage.value = "Please enter a food name to save to Library.";
+  const result = buildPhotoLibraryDraft({
+    name,
+    caloriesPerDisplayUnit: parseMacro(caloriesText.value),
+    proteinPerDisplayUnit: parseMacro(proteinText.value),
+    carbsPerDisplayUnit: parseMacro(carbsText.value),
+    fatPerDisplayUnit: parseMacro(fatText.value),
+    isLabelPhoto: isLabelPhoto.value,
+    labelGrams: parseMacro(labelGramsText.value)
+  });
+
+  if (!result.draft) {
+    errorMessage.value = result.error;
     return null;
   }
 
-  let calories = parseMacro(caloriesText.value);
-  let protein = parseMacro(proteinText.value);
-  let carbs = parseMacro(carbsText.value);
-  let fat = parseMacro(fatText.value);
-
-  if (calories == null || protein == null || carbs == null || fat == null) {
-    errorMessage.value = "Please enter valid macro values.";
-    return null;
-  }
-
-  if (isLabelPhoto.value) {
-    const grams = parseMacro(labelGramsText.value);
-    if (grams && grams > 0) {
-      const multiplier = grams / 100;
-      if (multiplier > 0) {
-        calories /= multiplier;
-        protein /= multiplier;
-        carbs /= multiplier;
-        fat /= multiplier;
-      }
-    }
-  }
-
-  return {
-    name: trimmed,
-    unit_type: "per_100g",
-    serving_size: null,
-    serving_unit: null,
-    calories_per_100g: calories,
-    protein_per_100g: protein,
-    carbs_per_100g: carbs,
-    fat_per_100g: fat,
-    calories_per_serving: 0,
-    protein_per_serving: 0,
-    carbs_per_serving: 0,
-    fat_per_serving: 0
-  };
+  return result.draft;
 };
 
 const saveLibraryDraft = async (draft: SavedFoodDraft): Promise<boolean> => {
-  const existing = await savedFoodRepository.fetchFoodByName(draft.name);
-  if (existing) {
-    pendingDuplicate.value = { existing, draft };
+  const result = await saveLibraryDraftWithDuplicateCheck(savedFoodRepository, draft);
+  if (result.status === "duplicate") {
+    pendingDuplicate.value = { ...result.pending };
     return false;
   }
-  await savedFoodRepository.insertFood(draft);
+
   return true;
 };
 
-const resolveDuplicate = async (choice: "update" | "create"): Promise<void> => {
+const resolveDuplicate = async (choice: DuplicateSaveChoice): Promise<void> => {
   if (!pendingDuplicate.value) return;
 
-  const { existing, draft, onResolved } = pendingDuplicate.value;
+  const { onResolved, ...pending } = pendingDuplicate.value;
   pendingDuplicate.value = null;
 
-  if (choice === "update") {
-    await savedFoodRepository.updateFood(existing.id, draft);
-  } else {
-    await savedFoodRepository.insertFood(draft);
-  }
+  await resolveDuplicateSaveChoice(savedFoodRepository, pending, choice);
 
   if (onResolved) {
     await onResolved();
@@ -622,6 +603,7 @@ const saveLogEntry = async (): Promise<void> => {
       }
     }
 
+    // Keep iOS parity: persist log entry first, then attempt optional library save.
     if (saveToLibrary.value) {
       const draft = buildLibraryDraft(libraryName.value || suggestedFoodName());
       if (draft) {
@@ -650,50 +632,22 @@ const saveManualLibrary = async (): Promise<void> => {
   saveMessage.value = null;
 
   try {
-    const trimmedName = libraryName.value.trim();
-    if (!trimmedName) {
-      throw new Error("Please enter a food name.");
+    const result = buildManualLibraryDraft({
+      name: libraryName.value,
+      unitType: manualUnitType.value,
+      servingSizeGrams: manualUnitType.value === "per_serving" ? parseMacro(manualServingSizeText.value) : null,
+      servingUnit: manualServingUnit.value,
+      caloriesPer100g: parseMacro(manualCaloriesText.value),
+      proteinPer100g: parseMacro(manualProteinText.value),
+      carbsPer100g: parseMacro(manualCarbsText.value),
+      fatPer100g: parseMacro(manualFatText.value)
+    });
+
+    if (!result.draft) {
+      throw new Error(result.error ?? "Unable to save to library.");
     }
 
-    const calories = parseMacro(manualCaloriesText.value);
-    const protein = parseMacro(manualProteinText.value);
-    const carbs = parseMacro(manualCarbsText.value);
-    const fat = parseMacro(manualFatText.value);
-    if (calories == null || protein == null || carbs == null || fat == null) {
-      throw new Error("Please enter valid macro values.");
-    }
-
-    const servingSize = manualUnitType.value === "per_serving" ? parseMacro(manualServingSizeText.value) : null;
-    if (manualUnitType.value === "per_serving" && (!servingSize || servingSize <= 0)) {
-      throw new Error("Please enter grams per serving.");
-    }
-
-    const perServing =
-      manualUnitType.value === "per_serving" && servingSize
-        ? {
-            calories: calories * (servingSize / 100),
-            protein: protein * (servingSize / 100),
-            carbs: carbs * (servingSize / 100),
-            fat: fat * (servingSize / 100)
-          }
-        : { calories: 0, protein: 0, carbs: 0, fat: 0 };
-
-    const draft: SavedFoodDraft = {
-      name: trimmedName,
-      unit_type: manualUnitType.value,
-      serving_size: manualUnitType.value === "per_serving" ? servingSize : null,
-      serving_unit: manualUnitType.value === "per_serving" ? manualServingUnit.value.trim() || null : null,
-      calories_per_100g: calories,
-      protein_per_100g: protein,
-      carbs_per_100g: carbs,
-      fat_per_100g: fat,
-      calories_per_serving: perServing.calories,
-      protein_per_serving: perServing.protein,
-      carbs_per_serving: perServing.carbs,
-      fat_per_serving: perServing.fat
-    };
-
-    const didSave = await saveLibraryDraft(draft);
+    const didSave = await saveLibraryDraft(result.draft);
     if (!didSave && pendingDuplicate.value) {
       pendingDuplicate.value.onResolved = async () => {
         await finishAndExit("library");
@@ -790,7 +744,10 @@ const removeItemRow = (id: string): void => {
 
 const hydrateFromDraft = async (): Promise<void> => {
   const draft = await loadDraft<AddLogDraft>(draftKey.value);
-  if (!draft) return;
+  if (!draft) {
+    hasUserEditedLibraryName.value = false;
+    return;
+  }
 
   entryMode.value = draft.entryMode;
   descriptionText.value = draft.descriptionText;
@@ -803,6 +760,7 @@ const hydrateFromDraft = async (): Promise<void> => {
   fatText.value = draft.fatText;
   saveToLibrary.value = draft.saveToLibrary;
   libraryName.value = draft.libraryName;
+  hasUserEditedLibraryName.value = draft.hasUserEditedLibraryName ?? false;
   selectedLibraryFoodId.value = draft.selectedLibraryFoodId;
   libraryFoodQuantityText.value = draft.libraryFoodQuantityText;
   libraryEntryMode.value = draft.libraryEntryMode;
@@ -828,6 +786,7 @@ const persistDraft = async (): Promise<void> => {
     fatText: fatText.value,
     saveToLibrary: saveToLibrary.value,
     libraryName: libraryName.value,
+    hasUserEditedLibraryName: hasUserEditedLibraryName.value,
     selectedLibraryFoodId: selectedLibraryFoodId.value,
     libraryFoodQuantityText: libraryFoodQuantityText.value,
     libraryEntryMode: libraryEntryMode.value,
@@ -864,6 +823,7 @@ watchDebounced(
     fatText,
     saveToLibrary,
     libraryName,
+    hasUserEditedLibraryName,
     selectedLibraryFoodId,
     libraryFoodQuantityText,
     libraryEntryMode,
@@ -886,6 +846,15 @@ watch(
   () => {
     errorMessage.value = null;
     saveMessage.value = null;
+  },
+  { immediate: true }
+);
+
+watch(
+  suggestedLibraryName,
+  (nextSuggestedName) => {
+    if (hasUserEditedLibraryName.value) return;
+    libraryName.value = nextSuggestedName ?? "";
   },
   { immediate: true }
 );
@@ -928,7 +897,7 @@ onUnmounted(() => {
       <Button variant="ghost" size="sm" @click="router.back()">Close</Button>
     </header>
 
-    <Card class="glass space-y-4 p-4 sm:p-5">
+    <Card v-if="mode === 'log'" class="glass space-y-4 p-4 sm:p-5">
       <div class="space-y-2">
         <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Quick library pick</label>
         <SelectField v-model="selectedLibraryFoodId">
@@ -972,7 +941,7 @@ onUnmounted(() => {
         <TabsContent value="manual" class="mt-4 space-y-3">
           <div class="space-y-1">
             <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Food name</label>
-            <Input v-model="libraryName" placeholder="e.g. Apple" />
+            <Input :model-value="libraryName" placeholder="e.g. Apple" @update:modelValue="onLibraryNameInput" />
           </div>
 
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -997,10 +966,22 @@ onUnmounted(() => {
           </div>
 
           <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Input v-model="manualCaloriesText" type="number" min="0" step="0.1" placeholder="Calories" />
-            <Input v-model="manualProteinText" type="number" min="0" step="0.1" placeholder="Protein" />
-            <Input v-model="manualCarbsText" type="number" min="0" step="0.1" placeholder="Carbs" />
-            <Input v-model="manualFatText" type="number" min="0" step="0.1" placeholder="Fat" />
+            <div class="space-y-1">
+              <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Calories</label>
+              <Input v-model="manualCaloriesText" type="number" min="0" step="0.1" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Protein</label>
+              <Input v-model="manualProteinText" type="number" min="0" step="0.1" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Carbs</label>
+              <Input v-model="manualCarbsText" type="number" min="0" step="0.1" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Fat</label>
+              <Input v-model="manualFatText" type="number" min="0" step="0.1" />
+            </div>
           </div>
 
           <p
@@ -1019,7 +1000,7 @@ onUnmounted(() => {
     </Card>
 
     <Card v-if="!selectedLibraryFood && (mode === 'log' || libraryEntryMode === 'photo')" class="space-y-4 p-4 sm:p-5">
-      <TabsRoot v-model="entryMode">
+      <TabsRoot v-if="mode === 'log'" v-model="entryMode">
         <TabsList class="inline-flex rounded-xl border border-border/70 bg-muted/70 p-1">
           <TabsTrigger
             value="description"
@@ -1092,7 +1073,26 @@ onUnmounted(() => {
     </Card>
 
     <Card v-if="estimate || selectedLibraryFood" class="space-y-4 p-4 sm:p-5">
-      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div v-if="mode === 'library'" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div class="space-y-1">
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Calories</label>
+          <Input v-model="caloriesText" type="number" min="0" step="0.1" />
+        </div>
+        <div class="space-y-1">
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Protein</label>
+          <Input v-model="proteinText" type="number" min="0" step="0.1" />
+        </div>
+        <div class="space-y-1">
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Carbs</label>
+          <Input v-model="carbsText" type="number" min="0" step="0.1" />
+        </div>
+        <div class="space-y-1">
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Fat</label>
+          <Input v-model="fatText" type="number" min="0" step="0.1" />
+        </div>
+      </div>
+
+      <div v-else class="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Input v-model="caloriesText" type="number" min="0" step="0.1" placeholder="Calories" />
         <Input v-model="proteinText" type="number" min="0" step="0.1" placeholder="Protein" />
         <Input v-model="carbsText" type="number" min="0" step="0.1" placeholder="Carbs" />
@@ -1104,11 +1104,16 @@ onUnmounted(() => {
           <input v-model="saveToLibrary" type="checkbox" class="size-4 rounded border-border accent-primary" />
           Save to library after logging
         </label>
-        <Input v-if="saveToLibrary" v-model="libraryName" placeholder="Library food name" />
+        <Input
+          v-if="saveToLibrary"
+          :model-value="libraryName"
+          placeholder="Library food name"
+          @update:modelValue="onLibraryNameInput"
+        />
       </div>
 
       <div v-if="mode === 'library'" class="space-y-2">
-        <Input v-model="libraryName" placeholder="Food name for library" />
+        <Input :model-value="libraryName" placeholder="Food name for library" @update:modelValue="onLibraryNameInput" />
         <Button class="w-full sm:w-auto" :loading="isSaving" @click="saveLibraryFromEstimate">Save to Library</Button>
       </div>
 

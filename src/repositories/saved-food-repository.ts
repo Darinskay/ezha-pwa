@@ -32,35 +32,51 @@ export const savedFoodRepository = {
 
   async fetchFoodByName(name: string): Promise<SavedFood | null> {
     const userId = await getUserId();
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      return null;
+    }
+
     const { data, error } = await supabaseClient
       .from("saved_foods")
       .select("*")
       .eq("user_id", userId)
-      .ilike("name", name)
-      .limit(1)
-      .maybeSingle();
+      .eq("is_meal", false)
+      .ilike("name", trimmedName)
+      .limit(20);
 
-    if (error || !data) {
+    if (error || !data?.length) {
       return null;
     }
 
-    return parseWithSchema(savedFoodSchema, data, "saved_food");
+    const normalizedName = trimmedName.toLocaleLowerCase();
+    const exactMatch =
+      data.find((food) => typeof food.name === "string" && food.name.trim().toLocaleLowerCase() === normalizedName) ??
+      null;
+
+    if (!exactMatch) {
+      return null;
+    }
+
+    return parseWithSchema(savedFoodSchema, exactMatch, "saved_food");
   },
 
   async insertFood(draft: SavedFoodDraft): Promise<void> {
     const userId = await getUserId();
-    const payload = { user_id: userId, ...draft };
+    const payload = { user_id: userId, is_meal: false, ...draft };
     const { error } = await supabaseClient.from("saved_foods").insert(payload);
     ensureNoError(error);
   },
 
   async updateFood(id: string, draft: SavedFoodDraft): Promise<void> {
-    const { error } = await supabaseClient.from("saved_foods").update(draft).eq("id", id);
+    const userId = await getUserId();
+    const { error } = await supabaseClient.from("saved_foods").update(draft).eq("id", id).eq("user_id", userId);
     ensureNoError(error);
   },
 
   async deleteFood(id: string): Promise<void> {
-    const { error } = await supabaseClient.from("saved_foods").delete().eq("id", id);
+    const userId = await getUserId();
+    const { error } = await supabaseClient.from("saved_foods").delete().eq("id", id).eq("user_id", userId);
     ensureNoError(error);
   },
 

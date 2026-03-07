@@ -8,6 +8,7 @@
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
     "pwa:assets": "vite-pwa-assets-generator --preset minimal-2023 public/logo.svg"
   },
   "dependencies": {
@@ -38,6 +39,7 @@
     "typescript": "^5.8.3",
     "vite": "^7.3.1",
     "vite-plugin-pwa": "^1.2.0",
+    "vitest": "^4.0.0",
     "vue-tsc": "^3.2.5"
   }
 }
