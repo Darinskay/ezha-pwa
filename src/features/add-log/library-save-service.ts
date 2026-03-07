@@ -50,7 +50,9 @@ export interface SuggestedLibraryNameInput {
   aiFoodName: string | null;
 }
 
-const isMacroTupleValid = (...values: Array<number | null>): values is [number, number, number, number] =>
+const isMacroTupleValid = (
+  values: [number | null, number | null, number | null, number | null]
+): values is [number, number, number, number] =>
   values.every((value) => value != null && Number.isFinite(value));
 
 const toPer100gFromDisplayValue = (value: number, isLabelPhoto: boolean, labelGrams: number | null): number => {
@@ -73,16 +75,18 @@ export const buildPhotoLibraryDraft = (input: PhotoLibraryDraftInput): LibraryDr
     return { draft: null, error: "Please enter a food name to save to Library." };
   }
 
-  if (
-    !isMacroTupleValid(
-      input.caloriesPerDisplayUnit,
-      input.proteinPerDisplayUnit,
-      input.carbsPerDisplayUnit,
-      input.fatPerDisplayUnit
-    )
-  ) {
+  const macroTuple: [number | null, number | null, number | null, number | null] = [
+    input.caloriesPerDisplayUnit,
+    input.proteinPerDisplayUnit,
+    input.carbsPerDisplayUnit,
+    input.fatPerDisplayUnit
+  ];
+
+  if (!isMacroTupleValid(macroTuple)) {
     return { draft: null, error: "Please enter valid macro values." };
   }
+
+  const [caloriesPerDisplayUnit, proteinPerDisplayUnit, carbsPerDisplayUnit, fatPerDisplayUnit] = macroTuple;
 
   return {
     error: null,
@@ -91,14 +95,10 @@ export const buildPhotoLibraryDraft = (input: PhotoLibraryDraftInput): LibraryDr
       unit_type: "per_100g",
       serving_size: null,
       serving_unit: null,
-      calories_per_100g: toPer100gFromDisplayValue(
-        input.caloriesPerDisplayUnit,
-        input.isLabelPhoto,
-        input.labelGrams
-      ),
-      protein_per_100g: toPer100gFromDisplayValue(input.proteinPerDisplayUnit, input.isLabelPhoto, input.labelGrams),
-      carbs_per_100g: toPer100gFromDisplayValue(input.carbsPerDisplayUnit, input.isLabelPhoto, input.labelGrams),
-      fat_per_100g: toPer100gFromDisplayValue(input.fatPerDisplayUnit, input.isLabelPhoto, input.labelGrams),
+      calories_per_100g: toPer100gFromDisplayValue(caloriesPerDisplayUnit, input.isLabelPhoto, input.labelGrams),
+      protein_per_100g: toPer100gFromDisplayValue(proteinPerDisplayUnit, input.isLabelPhoto, input.labelGrams),
+      carbs_per_100g: toPer100gFromDisplayValue(carbsPerDisplayUnit, input.isLabelPhoto, input.labelGrams),
+      fat_per_100g: toPer100gFromDisplayValue(fatPerDisplayUnit, input.isLabelPhoto, input.labelGrams),
       ...zeroPerServingMacros
     }
   };
@@ -110,11 +110,16 @@ export const buildManualLibraryDraft = (input: ManualLibraryDraftInput): Library
     return { draft: null, error: "Please enter a food name." };
   }
 
-  if (
-    !isMacroTupleValid(input.caloriesPer100g, input.proteinPer100g, input.carbsPer100g, input.fatPer100g)
-  ) {
+  const macroTuple: [number | null, number | null, number | null, number | null] = [
+    input.caloriesPer100g,
+    input.proteinPer100g,
+    input.carbsPer100g,
+    input.fatPer100g
+  ];
+  if (!isMacroTupleValid(macroTuple)) {
     return { draft: null, error: "Please enter valid macro values." };
   }
+  const [caloriesPer100g, proteinPer100g, carbsPer100g, fatPer100g] = macroTuple;
 
   if (input.unitType === "per_serving" && (!input.servingSizeGrams || input.servingSizeGrams <= 0)) {
     return { draft: null, error: "Please enter grams per serving." };
@@ -130,14 +135,14 @@ export const buildManualLibraryDraft = (input: ManualLibraryDraftInput): Library
       unit_type: input.unitType,
       serving_size: input.unitType === "per_serving" ? input.servingSizeGrams : null,
       serving_unit: input.unitType === "per_serving" ? input.servingUnit.trim() || null : null,
-      calories_per_100g: input.caloriesPer100g,
-      protein_per_100g: input.proteinPer100g,
-      carbs_per_100g: input.carbsPer100g,
-      fat_per_100g: input.fatPer100g,
-      calories_per_serving: input.caloriesPer100g * servingMultiplier,
-      protein_per_serving: input.proteinPer100g * servingMultiplier,
-      carbs_per_serving: input.carbsPer100g * servingMultiplier,
-      fat_per_serving: input.fatPer100g * servingMultiplier
+      calories_per_100g: caloriesPer100g,
+      protein_per_100g: proteinPer100g,
+      carbs_per_100g: carbsPer100g,
+      fat_per_100g: fatPer100g,
+      calories_per_serving: caloriesPer100g * servingMultiplier,
+      protein_per_serving: proteinPer100g * servingMultiplier,
+      carbs_per_serving: carbsPer100g * servingMultiplier,
+      fat_per_serving: fatPer100g * servingMultiplier
     }
   };
 };
