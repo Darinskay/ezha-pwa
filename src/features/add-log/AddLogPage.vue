@@ -22,12 +22,10 @@ import {
 import { formatMacro, savedFoodMacrosForQuantity } from "@/lib/macros";
 import { parseNumberInput } from "@/lib/number";
 import { queryKeys } from "@/query/keys";
-import { dailyTargetRepository } from "@/repositories/daily-target-repository";
 import { foodEntryRepository } from "@/repositories/food-entry-repository";
-import { profileRepository } from "@/repositories/profile-repository";
 import { savedFoodRepository } from "@/repositories/saved-food-repository";
 import { aiAnalysisService } from "@/services/ai-analysis-service";
-import { defaultProfileForUser } from "@/services/profile-bootstrap";
+import { resolveActiveDateForLogging } from "@/services/active-date-service";
 import { storageService } from "@/services/storage-service";
 import { currentUserId } from "@/lib/supabase";
 import type {
@@ -275,23 +273,6 @@ watch([isLabelPhoto, labelGramsText], () => {
   applyLabelScaling();
 });
 
-const resolvedActiveDate = async (userId: string): Promise<string> => {
-  const profile = await profileRepository.fetchProfile();
-  if (profile?.active_date) {
-    return profile.active_date;
-  }
-
-  const fallback = defaultProfileForUser(userId);
-  await profileRepository.ensureProfileRowExists(fallback);
-
-  const targets = await dailyTargetRepository.ensureTargets(fallback);
-  if (targets[0]) {
-    await profileRepository.updateActiveTarget(targets[0].id);
-  }
-
-  return fallback.active_date;
-};
-
 const validateItemInputs = (requireAtLeastOne: boolean): AIItemInput[] | null => {
   if (entryMode.value !== "list") return [];
 
@@ -516,7 +497,7 @@ const saveLogEntry = async (): Promise<void> => {
   try {
     if (selectedLibraryFood.value && libraryCalculatedMacros.value) {
       const userId = await currentUserId();
-      const activeDate = await resolvedActiveDate(userId);
+      const activeDate = await resolveActiveDateForLogging(userId);
 
       const entry: FoodEntry = {
         id: crypto.randomUUID(),
@@ -567,7 +548,7 @@ const saveLogEntry = async (): Promise<void> => {
     pendingEntryId.value = entryId;
 
     const imagePath = (await uploadIfNeeded()) ?? null;
-    const activeDate = await resolvedActiveDate(userId);
+    const activeDate = await resolveActiveDateForLogging(userId);
 
     const itemInputs = validateItemInputs(entryMode.value === "list" && !imagePath);
     if (!itemInputs) return;

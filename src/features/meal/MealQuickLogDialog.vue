@@ -9,9 +9,8 @@ import { formatMacro, savedFoodMacrosForQuantity } from "@/lib/macros";
 import { parseNumberInput } from "@/lib/number";
 import { currentUserId } from "@/lib/supabase";
 import { foodEntryRepository } from "@/repositories/food-entry-repository";
-import { profileRepository } from "@/repositories/profile-repository";
 import { savedFoodRepository } from "@/repositories/saved-food-repository";
-import { defaultProfileForUser } from "@/services/profile-bootstrap";
+import { resolveActiveDateForLogging } from "@/services/active-date-service";
 import type { FoodEntry, FoodEntryItem, SavedFood, SavedMealIngredient } from "@/types/domain";
 
 interface EditableIngredient {
@@ -128,17 +127,6 @@ const removeIngredient = (id: string): void => {
   ingredients.value = ingredients.value.filter((ingredient) => ingredient.id !== id);
 };
 
-const resolvedActiveDate = async (userId: string): Promise<string> => {
-  const profile = await profileRepository.fetchProfile();
-  if (profile?.active_date) {
-    return profile.active_date;
-  }
-
-  const fallback = defaultProfileForUser(userId);
-  await profileRepository.ensureProfileRowExists(fallback);
-  return fallback.active_date;
-};
-
 const buildScaledMacros = (ingredient: EditableIngredient) => {
   const scale = scaleFor(ingredient);
   return {
@@ -161,7 +149,7 @@ const save = async (): Promise<void> => {
   try {
     const userId = await currentUserId();
     const entryId = crypto.randomUUID();
-    const activeDate = await resolvedActiveDate(userId);
+    const activeDate = await resolveActiveDateForLogging(userId);
 
     const entry: FoodEntry = {
       id: entryId,
@@ -208,53 +196,58 @@ const save = async (): Promise<void> => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to save entry.";
     if (!navigator.onLine || message.toLowerCase().includes("network")) {
-      const userId = (await currentUserId().catch(() => "")) || "";
-      const entryId = crypto.randomUUID();
-      const activeDate = await resolvedActiveDate(userId);
+      try {
+        const userId = await currentUserId();
+        const entryId = crypto.randomUUID();
+        const activeDate = await resolveActiveDateForLogging(userId);
 
-      const queuedEntry: FoodEntry = {
-        id: entryId,
-        user_id: userId,
-        date: activeDate,
-        input_type: "text",
-        input_text: props.meal.name,
-        image_path: null,
-        calories: totals.value.calories,
-        protein: totals.value.protein,
-        carbs: totals.value.carbs,
-        fat: totals.value.fat,
-        ai_confidence: null,
-        ai_source: "library",
-        ai_notes: "Logged from saved meal",
-        created_at: null
-      };
+        const queuedEntry: FoodEntry = {
+          id: entryId,
+          user_id: userId,
+          date: activeDate,
+          input_type: "text",
+          input_text: props.meal.name,
+          image_path: null,
+          calories: totals.value.calories,
+          protein: totals.value.protein,
+          carbs: totals.value.carbs,
+          fat: totals.value.fat,
+          ai_confidence: null,
+          ai_source: "library",
+          ai_notes: "Logged from saved meal",
+          created_at: null
+        };
 
-      const queuedItems: FoodEntryItem[] = ingredients.value
-        .map((ingredient) => {
-          const grams = gramsFor(ingredient);
-          if (grams <= 0) return null;
-          const scaled = buildScaledMacros(ingredient);
-          return {
-            id: crypto.randomUUID(),
-            entry_id: entryId,
-            user_id: userId,
-            name: ingredient.name,
-            grams,
-            calories: scaled.calories,
-            protein: scaled.protein,
-            carbs: scaled.carbs,
-            fat: scaled.fat,
-            ai_confidence: null,
-            ai_notes: "",
-            created_at: null
-          } satisfies FoodEntryItem;
-        })
-        .filter(Boolean) as FoodEntryItem[];
+        const queuedItems: FoodEntryItem[] = ingredients.value
+          .map((ingredient) => {
+            const grams = gramsFor(ingredient);
+            if (grams <= 0) return null;
+            const scaled = buildScaledMacros(ingredient);
+            return {
+              id: crypto.randomUUID(),
+              entry_id: entryId,
+              user_id: userId,
+              name: ingredient.name,
+              grams,
+              calories: scaled.calories,
+              protein: scaled.protein,
+              carbs: scaled.carbs,
+              fat: scaled.fat,
+              ai_confidence: null,
+              ai_notes: "",
+              created_at: null
+            } satisfies FoodEntryItem;
+          })
+          .filter(Boolean) as FoodEntryItem[];
 
-      await enqueueRetry("create_food_entry", { entry: queuedEntry, items: queuedItems });
-      emit("saved");
-      emit("close");
-      return;
+        await enqueueRetry("create_food_entry", { entry: queuedEntry, items: queuedItems });
+        emit("saved");
+        emit("close");
+        return;
+      } catch (queueError) {
+        errorMessage.value = queueError instanceof Error ? queueError.message : message;
+        return;
+      }
     }
 
     errorMessage.value = message;

@@ -34,6 +34,8 @@ const activeDayStore = useActiveDayStore();
 
 const showTargetChooser = ref(false);
 const selectedTargetId = ref<string>("");
+const startNewDayError = ref<string | null>(null);
+const startNewDayWarning = ref<string | null>(null);
 
 const loadToday = async (): Promise<TodayData> => {
   const { profile, targets } = await ensureProfileAndTargets();
@@ -80,6 +82,9 @@ const todayError = computed(() => (todayQuery.error.value as Error | null) ?? nu
 
 const startNewDayMutation = useMutation({
   mutationFn: async (nextTarget: DailyTarget) => {
+    startNewDayError.value = null;
+    startNewDayWarning.value = null;
+
     const profile = await profileRepository.fetchProfile();
     if (!profile) throw new Error("Unable to load profile.");
 
@@ -106,11 +111,16 @@ const startNewDayMutation = useMutation({
       fat_target: summaryForActiveDate?.fat_target ?? currentTarget?.fat_target ?? profile.fat_target,
       has_data: entries.length > 0,
       daily_target_id: summaryForActiveDate?.daily_target_id ?? currentTarget?.id ?? null,
-      daily_target_name: summaryForActiveDate?.daily_target_name ?? currentTarget?.name ?? null,
-      created_at: null
+      daily_target_name: summaryForActiveDate?.daily_target_name ?? currentTarget?.name ?? null
     };
 
-    await dailySummaryRepository.upsertSummary(summary);
+    let summaryWarning: string | null = null;
+    try {
+      await dailySummaryRepository.upsertSummary(summary);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to save previous day summary.";
+      summaryWarning = `Started new day, but previous day summary could not be saved: ${message}`;
+    }
 
     const currentDate = parseDateKey(profile.active_date) ?? new Date();
     const candidate = addDays(currentDate, 1);
@@ -119,14 +129,22 @@ const startNewDayMutation = useMutation({
     await profileRepository.updateActiveDate(nextDate);
     await profileRepository.updateActiveTarget(nextTarget.id);
     activeDayStore.setActiveDate(nextDate);
+
+    return { summaryWarning };
   },
-  onSuccess: async () => {
+  onSuccess: async ({ summaryWarning }) => {
+    if (summaryWarning) {
+      startNewDayWarning.value = summaryWarning;
+    }
     showTargetChooser.value = false;
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.today }),
       queryClient.invalidateQueries({ queryKey: queryKeys.history }),
       queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext })
     ]);
+  },
+  onError: (error) => {
+    startNewDayError.value = error instanceof Error ? error.message : "Unable to start a new day.";
   }
 });
 
@@ -164,7 +182,11 @@ const startNewDay = async (): Promise<void> => {
   if (!data || data.availableTargets.length === 0) return;
 
   if (data.availableTargets.length === 1) {
-    await startNewDayMutation.mutateAsync(data.availableTargets[0]);
+    try {
+      await startNewDayMutation.mutateAsync(data.availableTargets[0]);
+    } catch {
+      // Error is handled via mutation onError and displayed in-page.
+    }
     return;
   }
 
@@ -177,7 +199,11 @@ const confirmStartNewDay = async (): Promise<void> => {
   if (!data) return;
   const nextTarget = data.availableTargets.find((target) => target.id === selectedTargetId.value);
   if (!nextTarget) return;
-  await startNewDayMutation.mutateAsync(nextTarget);
+  try {
+    await startNewDayMutation.mutateAsync(nextTarget);
+  } catch {
+    // Error is handled via mutation onError and displayed in-page.
+  }
 };
 
 const deleteEntry = async (entryId: string): Promise<void> => {
@@ -231,6 +257,18 @@ const deleteEntry = async (entryId: string): Promise<void> => {
 
       <p v-if="todayError" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
         {{ todayError.message }}
+      </p>
+      <p
+        v-if="startNewDayWarning"
+        class="rounded-xl border border-amber-300/50 bg-amber-100/60 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-200"
+      >
+        {{ startNewDayWarning }}
+      </p>
+      <p
+        v-if="startNewDayError"
+        class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+      >
+        {{ startNewDayError }}
       </p>
     </Card>
 

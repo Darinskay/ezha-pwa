@@ -12,7 +12,7 @@ export const profileRepository = {
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (error) return null;
+    ensureNoError(error);
     if (!data) return null;
     return parseWithSchema(profileSchema, data, "profile");
   },

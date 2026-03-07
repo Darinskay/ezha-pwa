@@ -12,10 +12,12 @@ const allowedSources = new Set(["food_photo", "label_photo", "text", "unknown", 
 export const foodEntryRepository = {
   async insertFoodEntry(entry: FoodEntry, items: FoodEntryItem[] = []): Promise<void> {
     const userId = await getUserId();
+    const createdAt = entry.created_at ?? new Date().toISOString();
 
     const payload: FoodEntry = {
       ...entry,
       user_id: userId,
+      created_at: createdAt,
       input_type: allowedInputTypes.has(entry.input_type) ? entry.input_type : "text",
       ai_source: allowedSources.has(entry.ai_source) ? entry.ai_source : "unknown"
     };
@@ -30,7 +32,8 @@ export const foodEntryRepository = {
     const itemPayloads = items.map((item) => ({
       ...item,
       user_id: userId,
-      entry_id: entry.id
+      entry_id: entry.id,
+      created_at: item.created_at ?? createdAt
     }));
 
     const insertItemsResponse = await supabaseClient.from("food_entry_items").insert(itemPayloads);
