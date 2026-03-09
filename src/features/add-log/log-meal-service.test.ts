@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   applyEditedLabelMacrosToItem,
+  buildFoodEntryPayload,
   buildEntryItemsFromLogItems,
+  buildLogInputText,
   buildLogItemFromSavedFood,
   buildLogItemsFromEstimate,
   buildLogItemsFromSavedMeal,
   buildMealIngredientsFromLogItems,
   macrosFromLogItem,
   resolveFoodEntryInput,
+  resolveLogMealAnalyzeInputType,
   scalePer100gMacros,
   totalsFromLogItems,
   type LogMealItem
@@ -122,6 +125,87 @@ describe("log-meal-service", () => {
     });
   });
 
+  it("resolves log analyze input type to food_photo, label_photo, or text", () => {
+    expect(resolveLogMealAnalyzeInputType(true, false)).toBe("food_photo");
+    expect(resolveLogMealAnalyzeInputType(true, true)).toBe("label_photo");
+    expect(resolveLogMealAnalyzeInputType(false, false)).toBe("text");
+  });
+
+  it("builds a photo-only log payload", () => {
+    const items = buildLogItemsFromEstimate(sampleEstimate());
+    const { entry, entryItems } = buildFoodEntryPayload({
+      entryId: "ab1bf9f5-3ed0-4c3c-a1df-822c458823a8",
+      userId: "43af8158-b1df-4f16-9e56-cfd24dd807b5",
+      activeDate: "2026-03-09",
+      imagePath: "food_images/u/e.jpg",
+      items,
+      sources: { usedPhoto: true, usedText: false, usedLibrary: false },
+      isLabelPhoto: false
+    });
+
+    expect(entry.input_type).toBe("photo");
+    expect(entry.ai_source).toBe("food_photo");
+    expect(entry.image_path).toBe("food_images/u/e.jpg");
+    expect(entry.input_text).toBe("Chicken, Rice");
+    expect(entryItems).toHaveLength(2);
+  });
+
+  it("builds a text-only log payload", () => {
+    const items = buildLogItemsFromEstimate(sampleEstimate());
+    const { entry, entryItems } = buildFoodEntryPayload({
+      entryId: "24599141-3b6b-4475-84a8-6715bfc56d61",
+      userId: "c26813d0-59f5-464f-b76f-3153f9831120",
+      activeDate: "2026-03-09",
+      imagePath: null,
+      items,
+      sources: { usedPhoto: false, usedText: true, usedLibrary: false },
+      isLabelPhoto: false
+    });
+
+    expect(entry.input_type).toBe("text");
+    expect(entry.ai_source).toBe("text");
+    expect(entry.image_path).toBeNull();
+    expect(entry.input_text).toBe("Chicken, Rice");
+    expect(entryItems).toHaveLength(2);
+  });
+
+  it("builds a library-only log payload", () => {
+    const items = [buildLogItemFromSavedFood(sampleFood())];
+    const { entry, entryItems } = buildFoodEntryPayload({
+      entryId: "09f3f5df-09b6-4d75-a9a6-071ec8983ce4",
+      userId: "5969f17e-fde4-4b94-8cd3-1fb3dbd1d5de",
+      activeDate: "2026-03-09",
+      imagePath: null,
+      items,
+      sources: { usedPhoto: false, usedText: false, usedLibrary: true },
+      isLabelPhoto: false
+    });
+
+    expect(entry.input_type).toBe("text");
+    expect(entry.ai_source).toBe("library");
+    expect(entry.input_text).toBe("Chicken Breast");
+    expect(entryItems).toHaveLength(1);
+  });
+
+  it("builds a mixed-source payload with photo+text metadata", () => {
+    const libraryItem = buildLogItemFromSavedFood(sampleFood());
+    const aiItem = buildLogItemsFromEstimate(sampleEstimate({ items: [] }), "Soup")[0];
+    const { entry, entryItems } = buildFoodEntryPayload({
+      entryId: "0f507d57-70cc-4f66-8f20-648a3f80ef38",
+      userId: "49dc19ef-2a84-404f-9251-c8f51400f7f8",
+      activeDate: "2026-03-09",
+      imagePath: "food_images/u/e.jpg",
+      items: [libraryItem, aiItem],
+      sources: { usedPhoto: true, usedText: true, usedLibrary: true },
+      isLabelPhoto: true
+    });
+
+    expect(entry.input_type).toBe("photo+text");
+    expect(entry.ai_source).toBe("label_photo");
+    expect(entry.input_text).toBe("Chicken Breast, Chicken rice bowl");
+    expect(entryItems).toHaveLength(2);
+  });
+
   it("supports label scaling and manual macro edit normalization", () => {
     const per100 = { calories: 400, protein: 20, carbs: 60, fat: 10 };
     const scaled60 = scalePer100gMacros(per100, 60);
@@ -216,5 +300,42 @@ describe("log-meal-service", () => {
     expect(draftTotals.protein).toBeCloseTo(totals.protein);
     expect(draftTotals.carbs).toBeCloseTo(totals.carbs);
     expect(draftTotals.fat).toBeCloseTo(totals.fat);
+  });
+
+  it("builds save-to-library meal ingredients from log items with linked food ids", () => {
+    const linkedFood = sampleFood({ id: "3294f966-b200-4f1f-83f1-c5be066fe785", name: "Greek Yogurt" });
+    const libraryFoodItem = buildLogItemFromSavedFood(linkedFood, 140);
+    const savedMealItems = buildLogItemsFromSavedMeal([
+      {
+        id: "d8fd7a6f-6cf3-4c2f-82f2-41068701617b",
+        meal_id: "488d2ed3-cdce-4374-9e15-35797f532ed1",
+        user_id: "f82e4339-4a2f-46fc-8751-39d089a16f19",
+        name: "Granola",
+        grams: 50,
+        calories: 230,
+        protein: 6,
+        carbs: 31,
+        fat: 10,
+        linked_food_id: "d2b6f4b5-9c26-4509-b7c7-3f1a74f4ea53",
+        created_at: null
+      }
+    ]);
+    const aiItem = buildLogItemsFromEstimate(sampleEstimate({ items: [] }), "Berries")[0];
+    aiItem.gramsText = "80";
+
+    const ingredients = buildMealIngredientsFromLogItems([libraryFoodItem, savedMealItems[0], aiItem]);
+    expect(ingredients).toHaveLength(3);
+    expect(ingredients[0].linked_food_id).toBe(linkedFood.id);
+    expect(ingredients[1].linked_food_id).toBe("d2b6f4b5-9c26-4509-b7c7-3f1a74f4ea53");
+    expect(ingredients[2].linked_food_id).toBeNull();
+  });
+
+  it("joins saved item names into input_text", () => {
+    const entryItems = buildEntryItemsFromLogItems(
+      "b3a8ef08-b00d-4aa4-ab64-a62367d334f0",
+      "5f6f806e-f6ba-4a8a-8d4f-7d4339f0120f",
+      [buildLogItemFromSavedFood(sampleFood()), buildLogItemsFromEstimate(sampleEstimate({ items: [] }))[0]]
+    );
+    expect(buildLogInputText(entryItems)).toBe("Chicken Breast, Chicken rice bowl");
   });
 });

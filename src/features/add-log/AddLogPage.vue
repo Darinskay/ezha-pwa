@@ -21,14 +21,14 @@ import {
 } from "@/features/add-log/library-save-service";
 import {
   applyEditedLabelMacrosToItem,
-  buildEntryItemsFromLogItems,
+  buildFoodEntryPayload,
   buildLabelLogItemsFromEstimate,
   buildLogItemFromSavedFood,
   buildLogItemsFromEstimate,
   buildLogItemsFromSavedMeal,
   buildMealIngredientsFromLogItems,
   macrosFromLogItem,
-  resolveFoodEntryInput,
+  resolveLogMealAnalyzeInputType,
   totalsFromLogItems,
   type LogMealItem
 } from "@/features/add-log/log-meal-service";
@@ -43,7 +43,6 @@ import { storageService } from "@/services/storage-service";
 import { currentUserId } from "@/lib/supabase";
 import type {
   AIItemInput,
-  FoodEntry,
   MacroEstimate,
   SavedFoodDraft
 } from "@/types/domain";
@@ -54,11 +53,15 @@ interface DraftItem {
   gramsText: string;
 }
 
+type LogWay = "camera" | "gallery" | "text" | "library";
+
 interface PendingDuplicate extends PendingLibraryDuplicate {
   onResolved?: () => Promise<void>;
 }
 
 interface AddLogDraft {
+  selectedLogWays: LogWay[];
+  selectedPhotoPicker: "camera" | "gallery" | null;
   entryMode: "description" | "list";
   descriptionText: string;
   items: DraftItem[];
@@ -97,10 +100,16 @@ const queryClient = useQueryClient();
 const mode = computed<"log" | "library">(() => (route.query.mode === "library" ? "library" : "log"));
 const draftKey = computed(() => `add-log:${mode.value}`);
 
+const selectedLogWays = ref<LogWay[]>([]);
+const selectedPhotoPicker = ref<"camera" | "gallery" | null>(null);
+
 const entryMode = ref<"description" | "list">("description");
 const descriptionText = ref("");
 const items = ref<DraftItem[]>([{ id: crypto.randomUUID(), name: "", gramsText: "" }]);
 const logItems = ref<LogMealItem[]>([]);
+
+const cameraFileInput = ref<HTMLInputElement | null>(null);
+const galleryFileInput = ref<HTMLInputElement | null>(null);
 
 const selectedImageFile = ref<File | null>(null);
 const imagePreviewUrl = ref<string | null>(null);
@@ -144,6 +153,11 @@ const manualCaloriesText = ref("");
 const manualProteinText = ref("");
 const manualCarbsText = ref("");
 const manualFatText = ref("");
+
+const isLogWaySelected = (way: LogWay): boolean => selectedLogWays.value.includes(way);
+const isTextWaySelected = computed(() => isLogWaySelected("text"));
+const isLibraryWaySelected = computed(() => isLogWaySelected("library"));
+const isPhotoWaySelected = computed(() => isLogWaySelected("camera") || isLogWaySelected("gallery"));
 
 const savedFoodsQuery = useQuery({
   queryKey: queryKeys.library,
@@ -189,13 +203,21 @@ const manualPerServingPreview = computed(() => {
 });
 
 const hasTextInput = computed(() => {
+  if (!isTextWaySelected.value) {
+    return false;
+  }
   if (entryMode.value === "list") {
     return items.value.some((item) => item.name.trim() || item.gramsText.trim());
   }
   return !!descriptionText.value.trim();
 });
 
-const hasPhotoInput = computed(() => !!selectedImageFile.value || !!pendingImagePath.value);
+const hasPhotoInput = computed(() => {
+  if (!isPhotoWaySelected.value) {
+    return false;
+  }
+  return !!selectedImageFile.value || !!pendingImagePath.value;
+});
 const hasAnyLogItems = computed(() => buildMealIngredientsFromLogItems(logItems.value).length > 0);
 const logTotals = computed(() => totalsFromLogItems(logItems.value));
 const canAddSelectedLibraryItem = computed(() => !!selectedLibraryFood.value && !isAnalyzing.value && !isSaving.value);
@@ -236,20 +258,11 @@ const onLibraryNameInput = (nextName: string): void => {
   libraryName.value = nextName;
 };
 
-const resolvedInputType = computed<"photo" | "text" | "photo+text">(() => {
-  if (hasPhotoInput.value && hasTextInput.value) return "photo+text";
-  if (hasPhotoInput.value) return "photo";
-  return "text";
-});
-
 const analysisInputType = computed(() => {
   if (mode.value === "library") {
     return isLabelPhoto.value ? "label_photo" : "photo";
   }
-  if (isLabelPhoto.value && hasPhotoInput.value) {
-    return "label_photo";
-  }
-  return resolvedInputType.value;
+  return resolveLogMealAnalyzeInputType(hasPhotoInput.value, isLabelPhoto.value);
 });
 
 const clearImage = (): void => {
@@ -260,9 +273,26 @@ const clearImage = (): void => {
   imagePreviewUrl.value = null;
   pendingEntryId.value = null;
   pendingImagePath.value = null;
+  selectedPhotoPicker.value = null;
   isLabelPhoto.value = false;
   labelGramsText.value = "";
   labelBaseEstimate = null;
+};
+
+const toggleLogWay = (way: LogWay): void => {
+  if (selectedLogWays.value.includes(way)) {
+    selectedLogWays.value = selectedLogWays.value.filter((current) => current !== way);
+    return;
+  }
+  selectedLogWays.value = [...selectedLogWays.value, way];
+};
+
+const pickFromCamera = (): void => {
+  cameraFileInput.value?.click();
+};
+
+const pickFromGallery = (): void => {
+  galleryFileInput.value?.click();
 };
 
 const setEstimate = (nextEstimate: MacroEstimate): void => {
@@ -390,25 +420,31 @@ const addSelectedLibraryFood = async (): Promise<void> => {
     return;
   }
 
-  const grams = parseMacro(libraryFoodQuantityText.value);
-  appendLogItems([buildLogItemFromSavedFood(selectedLibraryFood.value, grams ?? 100)]);
+  appendLogItems([buildLogItemFromSavedFood(selectedLibraryFood.value, 100)]);
   usedLibrarySource.value = true;
 };
 
 const analyze = async (): Promise<void> => {
+  if (isAnalyzing.value || isSaving.value) {
+    return;
+  }
+
   saveMessage.value = null;
   errorMessage.value = null;
 
   isAnalyzing.value = true;
   try {
     const itemInputs =
-      mode.value === "log"
+      mode.value === "log" && isTextWaySelected.value
         ? validateItemInputs(entryMode.value === "list" && !hasPhotoInput.value)
         : [];
     if (!itemInputs) return;
 
-    const imagePath = await uploadIfNeeded();
-    const text = mode.value === "log" && entryMode.value === "description" ? descriptionText.value.trim() : "";
+    const imagePath = isPhotoWaySelected.value ? await uploadIfNeeded() : null;
+    const text =
+      mode.value === "log" && isTextWaySelected.value && entryMode.value === "description"
+        ? descriptionText.value.trim()
+        : "";
 
     const nextEstimate = await aiAnalysisService.analyze({
       text: text || undefined,
@@ -443,7 +479,7 @@ const analyze = async (): Promise<void> => {
         usedPhotoSource.value = true;
         usedPhotoMode.value = isLabelPhoto.value ? "label_photo" : "food_photo";
       }
-      if (text || itemInputs.length > 0) {
+      if (isTextWaySelected.value && (text || itemInputs.length > 0)) {
         usedTextSource.value = true;
       }
     }
@@ -512,6 +548,10 @@ const finishAndExit = async (nextRouteName: "today" | "library"): Promise<void> 
 };
 
 const saveLogEntry = async (): Promise<void> => {
+  if (isAnalyzing.value || isSaving.value) {
+    return;
+  }
+
   if (!canSaveLog.value) {
     errorMessage.value = "Add at least one item before saving.";
     return;
@@ -532,50 +572,29 @@ const saveLogEntry = async (): Promise<void> => {
     pendingEntryId.value = entryId;
     const imagePath = hasPhotoInput.value ? (await uploadIfNeeded()) ?? null : null;
     const activeDate = await resolveActiveDateForLogging(userId);
-    const entryItems = buildEntryItemsFromLogItems(entryId, userId, logItems.value);
-    if (entryItems.length === 0) {
-      errorMessage.value = "Add at least one valid item with grams.";
-      return;
-    }
 
-    const totals = totalsFromLogItems(logItems.value);
     const hasLibraryItems = logItems.value.some(
       (item) => item.origin === "library_food" || item.origin === "library_meal"
     );
     const hasAiItems = logItems.value.some((item) => item.origin === "ai");
-    const resolvedSource = resolveFoodEntryInput(
-      {
+    const { entry, entryItems } = buildFoodEntryPayload({
+      entryId,
+      userId,
+      activeDate,
+      imagePath,
+      items: logItems.value,
+      sources: {
         usedPhoto: usedPhotoSource.value,
         usedText: usedTextSource.value || (hasAiItems && !usedPhotoSource.value),
         usedLibrary: hasLibraryItems
       },
-      usedPhotoMode.value === "label_photo"
-    );
+      isLabelPhoto: usedPhotoMode.value === "label_photo"
+    });
 
-    const confidenceValues = entryItems
-      .map((item) => item.ai_confidence)
-      .filter((value): value is number => value != null);
-    const aiConfidence =
-      confidenceValues.length > 0
-        ? confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length
-        : null;
-
-    const entry: FoodEntry = {
-      id: entryId,
-      user_id: userId,
-      date: activeDate,
-      input_type: resolvedSource.input_type,
-      input_text: suggestedFoodName(),
-      image_path: imagePath,
-      calories: totals.calories,
-      protein: totals.protein,
-      carbs: totals.carbs,
-      fat: totals.fat,
-      ai_confidence: aiConfidence,
-      ai_source: resolvedSource.ai_source,
-      ai_notes: "Logged from combined meal sources",
-      created_at: null
-    };
+    if (entryItems.length === 0) {
+      errorMessage.value = "Add at least one valid item with grams.";
+      return;
+    }
 
     try {
       await foodEntryRepository.insertFoodEntry(entry, entryItems);
@@ -698,12 +717,13 @@ const applyDescriptionToInputs = (): void => {
   }
 };
 
-const onFilePicked = (event: Event): void => {
+const onFilePicked = (event: Event, source: "camera" | "gallery" | null = null): void => {
   const target = event.target as HTMLInputElement;
   const file = target.files?.[0] ?? null;
   if (!file) return;
 
   clearImage();
+  selectedPhotoPicker.value = source;
   selectedImageFile.value = file;
   imagePreviewUrl.value = URL.createObjectURL(file);
 };
@@ -748,6 +768,8 @@ const applyLabelMacroEdits = (): void => {
 const hydrateFromDraft = async (): Promise<void> => {
   const draft = await loadDraft<AddLogDraft>(draftKey.value);
   if (!draft) {
+    selectedLogWays.value = [];
+    selectedPhotoPicker.value = null;
     entryMode.value = "description";
     descriptionText.value = "";
     items.value = [{ id: crypto.randomUUID(), name: "", gramsText: "" }];
@@ -782,6 +804,8 @@ const hydrateFromDraft = async (): Promise<void> => {
     return;
   }
 
+  selectedLogWays.value = draft.selectedLogWays ?? [];
+  selectedPhotoPicker.value = draft.selectedPhotoPicker ?? null;
   entryMode.value = draft.entryMode;
   descriptionText.value = draft.descriptionText;
   items.value = draft.items.length ? draft.items : [{ id: crypto.randomUUID(), name: "", gramsText: "" }];
@@ -815,6 +839,8 @@ const hydrateFromDraft = async (): Promise<void> => {
 
 const persistDraft = async (): Promise<void> => {
   const draft: AddLogDraft = {
+    selectedLogWays: selectedLogWays.value,
+    selectedPhotoPicker: selectedPhotoPicker.value,
     entryMode: entryMode.value,
     descriptionText: descriptionText.value,
     items: items.value,
@@ -859,6 +885,8 @@ watch(
 
 watchDebounced(
   [
+    selectedLogWays,
+    selectedPhotoPicker,
     entryMode,
     descriptionText,
     items,
@@ -974,6 +1002,42 @@ onUnmounted(() => {
 
     <Card v-if="mode === 'log'" class="glass space-y-4 p-4 sm:p-5">
       <div class="space-y-2">
+        <p class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Choose how to log</p>
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Button
+            size="sm"
+            :variant="isLogWaySelected('camera') ? 'default' : 'outline'"
+            @click="toggleLogWay('camera')"
+          >
+            Camera
+          </Button>
+          <Button
+            size="sm"
+            :variant="isLogWaySelected('gallery') ? 'default' : 'outline'"
+            @click="toggleLogWay('gallery')"
+          >
+            Gallery
+          </Button>
+          <Button
+            size="sm"
+            :variant="isLogWaySelected('text') ? 'default' : 'outline'"
+            @click="toggleLogWay('text')"
+          >
+            Text
+          </Button>
+          <Button
+            size="sm"
+            :variant="isLogWaySelected('library') ? 'default' : 'outline'"
+            @click="toggleLogWay('library')"
+          >
+            Library
+          </Button>
+        </div>
+      </div>
+    </Card>
+
+    <Card v-if="mode === 'log' && isLibraryWaySelected" class="glass space-y-4 p-4 sm:p-5">
+      <div class="space-y-2">
         <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Library search</label>
         <Input v-model="librarySearchText" placeholder="Search saved foods and meals" />
       </div>
@@ -1084,8 +1148,8 @@ onUnmounted(() => {
       </TabsRoot>
     </Card>
 
-    <Card v-if="mode === 'log' || libraryEntryMode === 'photo'" class="space-y-4 p-4 sm:p-5">
-      <TabsRoot v-if="mode === 'log'" v-model="entryMode">
+    <Card v-if="mode === 'log' ? isTextWaySelected || isPhotoWaySelected : libraryEntryMode === 'photo'" class="space-y-4 p-4 sm:p-5">
+      <TabsRoot v-if="mode === 'log' && isTextWaySelected" v-model="entryMode">
         <TabsList class="inline-flex rounded-xl border border-border/70 bg-muted/70 p-1">
           <TabsTrigger
             value="description"
@@ -1122,9 +1186,48 @@ onUnmounted(() => {
         </TabsContent>
       </TabsRoot>
 
-      <div class="space-y-2">
+      <div v-if="mode === 'library' || isPhotoWaySelected" class="space-y-2">
         <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Photo (optional)</label>
+        <template v-if="mode === 'log'">
+          <div class="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              :disabled="!isLogWaySelected('camera')"
+              @click="pickFromCamera"
+            >
+              Open Camera
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              :disabled="!isLogWaySelected('gallery')"
+              @click="pickFromGallery"
+            >
+              Open Gallery
+            </Button>
+          </div>
+          <input
+            ref="cameraFileInput"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            class="hidden"
+            @change="(event) => onFilePicked(event, 'camera')"
+          />
+          <input
+            ref="galleryFileInput"
+            type="file"
+            accept="image/*"
+            class="hidden"
+            @change="(event) => onFilePicked(event, 'gallery')"
+          />
+          <p v-if="selectedPhotoPicker" class="text-xs text-muted-foreground">
+            Selected source: {{ selectedPhotoPicker === "camera" ? "Camera" : "Gallery" }}
+          </p>
+        </template>
         <input
+          v-else
           type="file"
           accept="image/*"
           class="block w-full rounded-xl border border-border/70 bg-background/80 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-primary-foreground"
@@ -1154,7 +1257,15 @@ onUnmounted(() => {
         />
       </div>
 
-      <Button class="w-full sm:w-auto" :loading="isAnalyzing" :disabled="!canAnalyze" @click="analyze">Analyze</Button>
+      <Button
+        v-if="mode === 'library' || isTextWaySelected || isPhotoWaySelected"
+        class="w-full sm:w-auto"
+        :loading="isAnalyzing"
+        :disabled="!canAnalyze"
+        @click="analyze"
+      >
+        Analyze
+      </Button>
     </Card>
 
     <Card v-if="mode === 'library' ? !!estimate : hasAnyLogItems" class="space-y-4 p-4 sm:p-5">

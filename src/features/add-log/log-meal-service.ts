@@ -35,6 +35,23 @@ export interface UsedMealSources {
   usedLibrary: boolean;
 }
 
+export type LogMealAnalyzeInputType = "food_photo" | "label_photo" | "text";
+
+export interface BuildFoodEntryPayloadInput {
+  entryId: string;
+  userId: string;
+  activeDate: string;
+  imagePath: string | null;
+  items: LogMealItem[];
+  sources: UsedMealSources;
+  isLabelPhoto: boolean;
+}
+
+export interface BuildFoodEntryPayloadResult {
+  entry: FoodEntry;
+  entryItems: FoodEntryItem[];
+}
+
 const zeroTotals = (): MacroTotals => ({
   calories: 0,
   protein: 0,
@@ -306,6 +323,53 @@ export const buildMealIngredientsFromLogItems = (items: LogMealItem[]): SavedMea
       } satisfies SavedMealIngredientDraft;
     })
     .filter((item): item is SavedMealIngredientDraft => item !== null);
+
+export const resolveLogMealAnalyzeInputType = (hasPhoto: boolean, isLabelPhoto: boolean): LogMealAnalyzeInputType => {
+  if (hasPhoto) {
+    return isLabelPhoto ? "label_photo" : "food_photo";
+  }
+
+  return "text";
+};
+
+export const buildLogInputText = (items: FoodEntryItem[]): string => {
+  const names = items.map((item) => item.name.trim()).filter(Boolean);
+  return names.length > 0 ? names.join(", ") : "Meal";
+};
+
+export const buildFoodEntryPayload = (input: BuildFoodEntryPayloadInput): BuildFoodEntryPayloadResult => {
+  const entryItems = buildEntryItemsFromLogItems(input.entryId, input.userId, input.items);
+  const totals = totalsFromLogItems(input.items);
+  const source = resolveFoodEntryInput(input.sources, input.isLabelPhoto);
+
+  const confidenceValues = entryItems
+    .map((item) => item.ai_confidence)
+    .filter((value): value is number => value != null);
+  const aiConfidence =
+    confidenceValues.length > 0
+      ? confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length
+      : null;
+
+  return {
+    entryItems,
+    entry: {
+      id: input.entryId,
+      user_id: input.userId,
+      date: input.activeDate,
+      input_type: source.input_type,
+      input_text: buildLogInputText(entryItems),
+      image_path: input.imagePath,
+      calories: totals.calories,
+      protein: totals.protein,
+      carbs: totals.carbs,
+      fat: totals.fat,
+      ai_confidence: aiConfidence,
+      ai_source: source.ai_source,
+      ai_notes: "Logged from combined meal sources",
+      created_at: null
+    }
+  };
+};
 
 export const resolveFoodEntryInput = (
   sources: UsedMealSources,
