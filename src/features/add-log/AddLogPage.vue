@@ -374,6 +374,11 @@ const appendLogItems = (nextItems: LogMealItem[]): void => {
   logItems.value = [...logItems.value, ...nextItems];
 };
 
+const replaceAiLogItems = (nextAiItems: LogMealItem[]): void => {
+  const nonAiItems = logItems.value.filter((item) => item.origin !== "ai");
+  logItems.value = [...nonAiItems, ...nextAiItems];
+};
+
 const removeLogItem = (id: string): void => {
   logItems.value = logItems.value.filter((item) => item.id !== id);
   if (latestLabelItemId.value === id) {
@@ -466,11 +471,12 @@ const analyze = async (): Promise<void> => {
       if (isLabelPhoto.value) {
         const grams = parseMacro(labelGramsText.value);
         const labelItems = buildLabelLogItemsFromEstimate(nextEstimate, grams, suggestedFoodName());
-        appendLogItems(labelItems);
+        replaceAiLogItems(labelItems);
         latestLabelItemId.value = labelItems[0]?.id ?? null;
         syncLabelEditorFromItem();
       } else {
-        appendLogItems(buildLogItemsFromEstimate(nextEstimate, suggestedFoodName()));
+        const aiItems = buildLogItemsFromEstimate(nextEstimate, suggestedFoodName());
+        replaceAiLogItems(aiItems);
         setMacroTextFromTotals(logTotals.value);
         latestLabelItemId.value = null;
       }
@@ -681,39 +687,6 @@ const saveLibraryFromEstimate = async (): Promise<void> => {
     errorMessage.value = error instanceof Error ? error.message : "Unable to save to library.";
   } finally {
     isSaving.value = false;
-  }
-};
-
-const parseQuickText = (value: string): { name: string; grams: number } | null => {
-  const text = value.trim();
-  if (!text) return null;
-
-  const patterns: Array<{ pattern: RegExp; nameIndex: number; gramsIndex: number }> = [
-    { pattern: /^(.+?)\s+(\d+(?:\.\d+)?)\s*g?$/i, nameIndex: 1, gramsIndex: 2 },
-    { pattern: /^(\d+(?:\.\d+)?)\s*g?\s+(.+)$/i, nameIndex: 2, gramsIndex: 1 }
-  ];
-
-  for (const candidate of patterns) {
-    const match = text.match(candidate.pattern);
-    if (!match) continue;
-
-    const name = match[candidate.nameIndex]?.trim();
-    const grams = Number(match[candidate.gramsIndex]);
-    if (!name || !Number.isFinite(grams) || grams <= 0) continue;
-
-    return { name, grams };
-  }
-
-  return null;
-};
-
-const applyDescriptionToInputs = (): void => {
-  if (!descriptionText.value.trim()) return;
-  const parsed = parseQuickText(descriptionText.value);
-  if (parsed) {
-    entryMode.value = "list";
-    items.value = [{ id: crypto.randomUUID(), name: parsed.name, gramsText: formatMacro(parsed.grams, 1) }];
-    descriptionText.value = "";
   }
 };
 
@@ -1171,15 +1144,12 @@ onUnmounted(() => {
             :rows="4"
             placeholder="Describe your meal. Example: chicken with rice, 250g"
           />
-          <div class="mt-2">
-            <Button size="sm" variant="secondary" @click="applyDescriptionToInputs">Parse grams to list</Button>
-          </div>
         </TabsContent>
 
         <TabsContent value="list" class="mt-4 space-y-2">
           <article v-for="item in items" :key="item.id" class="grid grid-cols-12 gap-2 rounded-xl border border-border/70 bg-background/80 p-2">
             <Input v-model="item.name" class="col-span-7" placeholder="Food name" />
-            <Input v-model="item.gramsText" class="col-span-4" type="number" min="0" step="0.1" placeholder="g" />
+            <Input v-model="item.gramsText" class="col-span-4" type="number" min="0" step="0.1" placeholder="Grams (g)" />
             <Button variant="ghost" class="col-span-1 px-0" @click="removeItemRow(item.id)">×</Button>
           </article>
           <Button size="sm" variant="secondary" @click="addItemRow">Add item</Button>
@@ -1299,7 +1269,10 @@ onUnmounted(() => {
             <Button variant="ghost" size="sm" @click="removeLogItem(item.id)">Remove</Button>
           </div>
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Input v-model="item.gramsText" type="number" min="0" step="0.1" placeholder="Grams" />
+            <div class="space-y-1">
+              <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Grams (g)</label>
+              <Input v-model="item.gramsText" type="number" min="0" step="0.1" placeholder="Grams (g)" />
+            </div>
             <p class="rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               {{ formatMacro(macrosFromLogItem(item).calories, 1) }} kcal ·
               P{{ formatMacro(macrosFromLogItem(item).protein, 1) }} ·

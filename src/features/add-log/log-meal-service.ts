@@ -3,6 +3,7 @@ import { parseNumberInput } from "@/lib/number";
 import type {
   FoodEntry,
   FoodEntryItem,
+  MacroItemEstimate,
   MacroEstimate,
   MacroTotals,
   SavedFood,
@@ -61,6 +62,11 @@ const zeroTotals = (): MacroTotals => ({
 
 const toPositiveNumberOr = (value: number | null, fallback: number): number =>
   value != null && Number.isFinite(value) && value > 0 ? value : fallback;
+
+const normalizeEstimateItems = (items: MacroItemEstimate[]): MacroItemEstimate[] =>
+  items
+    .map((item) => ({ ...item, name: item.name.trim() }))
+    .filter((item) => item.name.length > 0);
 
 export const parseLogItemGrams = (value: string): number | null => {
   const parsed = parseNumberInput(value);
@@ -140,7 +146,9 @@ export const buildLogItemsFromEstimate = (
   estimate: MacroEstimate,
   fallbackName = "AI item"
 ): LogMealItem[] => {
-  if (estimate.items.length === 0) {
+  const normalizedItems = normalizeEstimateItems(estimate.items);
+
+  if (normalizedItems.length === 0) {
     return [
       {
         id: crypto.randomUUID(),
@@ -160,7 +168,7 @@ export const buildLogItemsFromEstimate = (
     ];
   }
 
-  return estimate.items.map((item) => ({
+  return normalizedItems.map((item) => ({
     id: crypto.randomUUID(),
     name: item.name,
     gramsText: formatMacro(toPositiveNumberOr(item.grams, 1), 1),
@@ -183,8 +191,9 @@ export const buildLabelLogItemsFromEstimate = (
   fallbackName = "Nutrition label"
 ): LogMealItem[] => {
   const resolvedGrams = toPositiveNumberOr(grams, 100);
+  const normalizedItems = normalizeEstimateItems(estimate.items);
 
-  if (estimate.items.length === 0) {
+  if (normalizedItems.length === 0) {
     return [
       {
         id: crypto.randomUUID(),
@@ -204,7 +213,7 @@ export const buildLabelLogItemsFromEstimate = (
     ];
   }
 
-  return estimate.items.map((item) => ({
+  return normalizedItems.map((item) => ({
     id: crypto.randomUUID(),
     name: item.name,
     gramsText: formatMacro(resolvedGrams, 1),

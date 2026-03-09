@@ -98,6 +98,51 @@ describe("log-meal-service", () => {
     expect(entryItems[1].grams).toBe(180);
   });
 
+  it("keeps duplicate AI item names as separate editable rows", () => {
+    const aiItems = buildLogItemsFromEstimate(
+      sampleEstimate({
+        items: [
+          {
+            name: "Egg",
+            grams: 50,
+            calories: 78,
+            protein: 6.3,
+            carbs: 0.4,
+            fat: 5.3,
+            confidence: 0.92
+          },
+          {
+            name: "egg",
+            grams: 100,
+            calories: 155,
+            protein: 12.6,
+            carbs: 0.8,
+            fat: 10.6,
+            confidence: 0.88
+          }
+        ]
+      })
+    );
+
+    expect(aiItems).toHaveLength(2);
+    expect(aiItems[0].name).toBe("Egg");
+    expect(aiItems[0].gramsText).toBe("50");
+    expect(aiItems[1].name).toBe("egg");
+    expect(aiItems[1].gramsText).toBe("100");
+
+    const firstMacros = macrosFromLogItem(aiItems[0]);
+    expect(firstMacros.calories).toBeCloseTo(78);
+    expect(firstMacros.protein).toBeCloseTo(6.3);
+    expect(firstMacros.carbs).toBeCloseTo(0.4);
+    expect(firstMacros.fat).toBeCloseTo(5.3);
+
+    const secondMacros = macrosFromLogItem(aiItems[1]);
+    expect(secondMacros.calories).toBeCloseTo(155);
+    expect(secondMacros.protein).toBeCloseTo(12.6);
+    expect(secondMacros.carbs).toBeCloseTo(0.8);
+    expect(secondMacros.fat).toBeCloseTo(10.6);
+  });
+
   it("resolves source metadata for each log source and mixed source", () => {
     expect(resolveFoodEntryInput({ usedPhoto: false, usedText: true, usedLibrary: false }, false)).toEqual({
       input_type: "text",
