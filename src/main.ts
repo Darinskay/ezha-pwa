@@ -18,7 +18,51 @@ retryQueueService.register("create_food_entry", async (payload) => {
 
 retryQueueService.start();
 
-registerSW({ immediate: true });
+let isHardUpdatingServiceWorker = false;
+
+const clearServiceWorkerCaches = async (): Promise<void> => {
+  if (!("caches" in window)) return;
+  const keys = await caches.keys();
+  await Promise.all(keys.map((key) => caches.delete(key)));
+};
+
+const hardUpdateServiceWorker = async (
+  triggerUpdate: (reloadPage?: boolean) => Promise<void>
+): Promise<void> => {
+  if (isHardUpdatingServiceWorker) return;
+  isHardUpdatingServiceWorker = true;
+
+  try {
+    await clearServiceWorkerCaches();
+    await triggerUpdate(true);
+  } catch {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map((registration) => registration.unregister()));
+    await clearServiceWorkerCaches();
+    window.location.reload();
+    return;
+  }
+
+  window.setTimeout(() => {
+    window.location.reload();
+  }, 1500);
+};
+
+let updateServiceWorker: ((reloadPage?: boolean) => Promise<void>) | null = null;
+
+updateServiceWorker = registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    if (!updateServiceWorker) return;
+    void hardUpdateServiceWorker(updateServiceWorker);
+  },
+  onRegisteredSW(_swUrl, registration) {
+    if (!registration) return;
+    window.setInterval(() => {
+      void registration.update();
+    }, 60_000);
+  }
+});
 
 const app = createApp(App);
 const pinia = createPinia();
