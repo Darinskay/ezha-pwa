@@ -211,39 +211,58 @@ const deleteEntry = async (entryId: string): Promise<void> => {
   if (!confirmed) return;
   await deleteEntryMutation.mutateAsync(entryId);
 };
+
+const remainingAmount = (target: number, eaten: number): number => Math.max(target - eaten, 0);
+
+const consumedPercent = (target: number, eaten: number): number => {
+  if (target <= 0) return 0;
+  return Math.max(0, Math.round((eaten / target) * 100));
+};
 </script>
 
 <template>
-  <section class="app-page">
+  <section class="app-page feature feature-today">
     <header class="page-header">
       <h1 class="page-title">{{ title }}</h1>
       <p class="page-subtitle">Track your active day and roll over when you are done.</p>
     </header>
 
-    <Card class="glass space-y-4 p-4 sm:p-5">
+    <Card class="glass space-y-4 p-3 sm:p-5">
       <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div class="stat-chip">
           <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Calories Left</p>
-          <p class="mt-1 text-lg font-semibold">
-            {{ Math.max((todayData?.targets.calories ?? 0) - (todayData?.totals.calories ?? 0), 0) }}
+          <p class="mt-1 text-base font-semibold sm:text-lg">
+            {{ remainingAmount(todayData?.targets.calories ?? 0, todayData?.totals.calories ?? 0) }}
+            <span class="ml-1 text-xs font-medium text-muted-foreground">
+              · {{ consumedPercent(todayData?.targets.calories ?? 0, todayData?.totals.calories ?? 0) }}%
+            </span>
           </p>
         </div>
         <div class="stat-chip">
           <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Protein Left</p>
-          <p class="mt-1 text-lg font-semibold">
-            {{ Math.max((todayData?.targets.protein ?? 0) - (todayData?.totals.protein ?? 0), 0) }}g
+          <p class="mt-1 text-base font-semibold sm:text-lg">
+            {{ remainingAmount(todayData?.targets.protein ?? 0, todayData?.totals.protein ?? 0) }}g
+            <span class="ml-1 text-xs font-medium text-muted-foreground">
+              · {{ consumedPercent(todayData?.targets.protein ?? 0, todayData?.totals.protein ?? 0) }}%
+            </span>
           </p>
         </div>
         <div class="stat-chip">
           <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Carbs Left</p>
-          <p class="mt-1 text-lg font-semibold">
-            {{ Math.max((todayData?.targets.carbs ?? 0) - (todayData?.totals.carbs ?? 0), 0) }}g
+          <p class="mt-1 text-base font-semibold sm:text-lg">
+            {{ remainingAmount(todayData?.targets.carbs ?? 0, todayData?.totals.carbs ?? 0) }}g
+            <span class="ml-1 text-xs font-medium text-muted-foreground">
+              · {{ consumedPercent(todayData?.targets.carbs ?? 0, todayData?.totals.carbs ?? 0) }}%
+            </span>
           </p>
         </div>
         <div class="stat-chip">
           <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Fat Left</p>
-          <p class="mt-1 text-lg font-semibold">
-            {{ Math.max((todayData?.targets.fat ?? 0) - (todayData?.totals.fat ?? 0), 0) }}g
+          <p class="mt-1 text-base font-semibold sm:text-lg">
+            {{ remainingAmount(todayData?.targets.fat ?? 0, todayData?.totals.fat ?? 0) }}g
+            <span class="ml-1 text-xs font-medium text-muted-foreground">
+              · {{ consumedPercent(todayData?.targets.fat ?? 0, todayData?.totals.fat ?? 0) }}%
+            </span>
           </p>
         </div>
       </div>
@@ -279,7 +298,7 @@ const deleteEntry = async (entryId: string): Promise<void> => {
       </Button>
     </div>
 
-    <Card v-if="showTargetChooser && todayData" class="space-y-3 p-4 sm:p-5">
+    <Card v-if="showTargetChooser && todayData" class="space-y-3 p-3 sm:p-5">
       <h3 class="text-sm font-semibold">Choose target for next day</h3>
       <SelectField v-model="selectedTargetId">
         <option v-for="target in todayData.availableTargets" :key="target.id" :value="target.id">
@@ -293,7 +312,7 @@ const deleteEntry = async (entryId: string): Promise<void> => {
       </div>
     </Card>
 
-    <Card class="space-y-3 p-4 sm:p-5">
+    <Card class="space-y-3 p-3 sm:p-5">
       <div class="flex items-center justify-between gap-3">
         <h2 class="text-lg font-semibold">Today&apos;s Progress</h2>
         <span class="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">

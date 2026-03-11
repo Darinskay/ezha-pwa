@@ -108,13 +108,13 @@ const sortedTargets = computed(() => targetsQuery.data.value ?? []);
 </script>
 
 <template>
-  <section class="app-page">
+  <section class="app-page feature feature-settings">
     <header class="page-header">
       <h1 class="page-title">Settings</h1>
       <p class="page-subtitle">Manage daily targets, appearance, and session.</p>
     </header>
 
-    <Card class="space-y-3 p-4 sm:p-5">
+    <Card class="space-y-3 p-3 sm:p-5">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <h2 class="text-lg font-semibold">Daily Targets</h2>
         <Button size="sm" @click="openCreate">Add Target</Button>
@@ -168,7 +168,7 @@ const sortedTargets = computed(() => targetsQuery.data.value ?? []);
       <p v-if="saveMessage" class="rounded-xl border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary">{{ saveMessage }}</p>
     </Card>
 
-    <Card class="space-y-3 p-4 sm:p-5">
+    <Card class="space-y-3 p-3 sm:p-5">
       <h2 class="text-lg font-semibold">Appearance</h2>
       <SelectField v-model="settingsStore.appearance">
         <option value="system">System</option>
@@ -177,7 +177,7 @@ const sortedTargets = computed(() => targetsQuery.data.value ?? []);
       </SelectField>
     </Card>
 
-    <Card class="space-y-3 p-4 sm:p-5">
+    <Card class="space-y-3 p-3 sm:p-5">
       <h2 class="text-lg font-semibold">Session</h2>
       <Button variant="destructive" :loading="authStore.isLoading" @click="authStore.signOut">Sign out</Button>
     </Card>

@@ -171,29 +171,29 @@ const refreshContext = async (): Promise<void> => {
 </script>
 
 <template>
-  <section class="app-page">
+  <section class="app-page feature feature-suggestions">
     <header class="page-header">
       <h1 class="page-title">Suggestions</h1>
       <p class="page-subtitle">AI meal ideas based on your remaining macros.</p>
     </header>
 
-    <Card class="glass space-y-4 p-4 sm:p-5">
+    <Card class="glass space-y-4 p-3 sm:p-5">
       <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div class="stat-chip">
           <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Calories</p>
-          <p class="mt-1 text-lg font-semibold">{{ contextData?.remaining.calories ?? 0 }} kcal</p>
+          <p class="mt-1 text-base font-semibold sm:text-lg">{{ contextData?.remaining.calories ?? 0 }} kcal</p>
         </div>
         <div class="stat-chip">
           <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Protein</p>
-          <p class="mt-1 text-lg font-semibold">{{ contextData?.remaining.protein ?? 0 }} g</p>
+          <p class="mt-1 text-base font-semibold sm:text-lg">{{ contextData?.remaining.protein ?? 0 }} g</p>
         </div>
         <div class="stat-chip">
           <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Carbs</p>
-          <p class="mt-1 text-lg font-semibold">{{ contextData?.remaining.carbs ?? 0 }} g</p>
+          <p class="mt-1 text-base font-semibold sm:text-lg">{{ contextData?.remaining.carbs ?? 0 }} g</p>
         </div>
         <div class="stat-chip">
           <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Fat</p>
-          <p class="mt-1 text-lg font-semibold">{{ contextData?.remaining.fat ?? 0 }} g</p>
+          <p class="mt-1 text-base font-semibold sm:text-lg">{{ contextData?.remaining.fat ?? 0 }} g</p>
         </div>
       </div>
 
@@ -213,7 +213,7 @@ const refreshContext = async (): Promise<void> => {
       <Button variant="ghost" size="sm" @click="refreshContext">Refresh context</Button>
     </Card>
 
-    <Card class="space-y-4 p-4 sm:p-5">
+    <Card class="space-y-4 p-3 sm:p-5">
       <div class="grid gap-3 sm:grid-cols-2">
         <div class="space-y-1">
           <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Meal type</label>
@@ -254,11 +254,11 @@ const refreshContext = async (): Promise<void> => {
     </Card>
 
     <div class="space-y-3">
-      <Card v-if="!suggestions.length" class="rounded-2xl border-dashed p-4 text-sm text-muted-foreground">
+      <Card v-if="!suggestions.length" class="rounded-2xl border-dashed p-3 text-sm text-muted-foreground sm:p-4">
         No suggestions yet. Fill the form and tap Get suggestions.
       </Card>
 
-      <Card v-for="suggestion in suggestions" :key="suggestion.id" class="space-y-3 p-4 sm:p-5">
+      <Card v-for="suggestion in suggestions" :key="suggestion.id" class="space-y-3 p-3 sm:p-5">
         <div class="flex items-start justify-between gap-3">
           <h3 class="text-base font-semibold">{{ suggestion.title }}</h3>
           <span class="rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">

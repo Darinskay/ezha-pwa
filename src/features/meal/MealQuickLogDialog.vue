@@ -258,8 +258,8 @@ const save = async (): Promise<void> => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4 backdrop-blur-sm">
-    <Card class="max-h-[92vh] w-full max-w-2xl overflow-y-auto border-border/80 bg-card/96 p-4 sm:p-5">
+  <div class="dialog-overlay feature feature-library">
+    <Card class="max-h-[88vh] w-full max-w-none rounded-t-[1.2rem] rounded-b-none overflow-y-auto border-border/80 bg-card/96 p-3 sm:max-h-[92vh] sm:max-w-2xl sm:rounded-[1.4rem] sm:p-5">
       <div class="mb-4 flex items-center justify-between">
         <div>
           <h3 class="text-lg font-semibold">Log Meal</h3>

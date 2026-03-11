@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  MAX_LOG_ITEM_GRAMS,
   applyEditedLabelMacrosToItem,
   buildFoodEntryPayload,
   buildEntryItemsFromLogItems,
@@ -9,6 +10,7 @@ import {
   buildLogItemsFromSavedMeal,
   buildMealIngredientsFromLogItems,
   macrosFromLogItem,
+  normalizeLogItemGrams,
   resolveFoodEntryInput,
   resolveLogMealAnalyzeInputType,
   scalePer100gMacros,
@@ -313,10 +315,55 @@ describe("log-meal-service", () => {
 
     const mealItems = buildLogItemsFromSavedMeal(ingredients);
     expect(mealItems).toHaveLength(2);
+    expect(mealItems[0].macroBasis).toBe("per_100g");
     mealItems[0].gramsText = "300";
     const pastaMacros = macrosFromLogItem(mealItems[0]);
     expect(pastaMacros.calories).toBeCloseTo(390);
     expect(pastaMacros.carbs).toBeCloseTo(76.5);
+  });
+
+  it("clamps grams input to MAX_LOG_ITEM_GRAMS for calculations and save rows", () => {
+    const item = buildLogItemFromSavedFood(sampleFood());
+    item.gramsText = "99999";
+
+    expect(normalizeLogItemGrams(item.gramsText)).toBe(MAX_LOG_ITEM_GRAMS);
+    const macros = macrosFromLogItem(item);
+    expect(macros.calories).toBeCloseTo((sampleFood().calories_per_100g * MAX_LOG_ITEM_GRAMS) / 100);
+
+    const rows = buildEntryItemsFromLogItems(
+      "3af7f8ad-7575-42cf-8bb2-259e622ec6dc",
+      "b29b4a00-b14d-420f-96c4-8f9ca30f4de6",
+      [item]
+    );
+    expect(rows[0].grams).toBe(MAX_LOG_ITEM_GRAMS);
+  });
+
+  it("flags missing meal-template nutrition and blocks those items from save payloads", () => {
+    const mealItems = buildLogItemsFromSavedMeal([
+      {
+        id: "afcd8b57-2496-4581-98e8-b494d8bafab1",
+        meal_id: "3a4bc95c-bf44-4876-ab35-d6b8764a90a9",
+        user_id: "45f31167-8b8f-40f3-8428-b8618ffcbf2d",
+        name: "Unknown Ingredient",
+        grams: 0,
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        linked_food_id: null,
+        created_at: null
+      }
+    ]);
+
+    expect(mealItems[0].isNutritionMissing).toBe(true);
+    expect(macrosFromLogItem(mealItems[0])).toEqual({ calories: 0, protein: 0, carbs: 0, fat: 0 });
+    expect(
+      buildEntryItemsFromLogItems(
+        "470f9722-9e8c-4cb9-b8f4-5f71ca4ee0a7",
+        "37d2a332-0df4-4b8b-96bf-dcc52b3abb4a",
+        mealItems
+      )
+    ).toHaveLength(0);
   });
 
   it("builds saved meal ingredient drafts from current log items", () => {

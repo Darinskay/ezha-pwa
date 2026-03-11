@@ -135,5 +135,29 @@ export const savedFoodRepository = {
 
     ensureNoError(error);
     return parseListWithSchema(savedMealIngredientSchema, data ?? [], "saved_meal_ingredients");
+  },
+
+  async fetchMealIngredientsByMealIds(mealIds: string[]): Promise<Map<string, SavedMealIngredient[]>> {
+    const grouped = new Map<string, SavedMealIngredient[]>();
+    if (mealIds.length === 0) {
+      return grouped;
+    }
+
+    const { data, error } = await supabaseClient
+      .from("saved_meal_ingredients")
+      .select("*")
+      .in("meal_id", mealIds)
+      .order("created_at", { ascending: true });
+
+    ensureNoError(error);
+    const rows = parseListWithSchema(savedMealIngredientSchema, data ?? [], "saved_meal_ingredients");
+
+    for (const row of rows) {
+      const bucket = grouped.get(row.meal_id) ?? [];
+      bucket.push(row);
+      grouped.set(row.meal_id, bucket);
+    }
+
+    return grouped;
   }
 };

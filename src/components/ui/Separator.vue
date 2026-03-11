@@ -17,7 +17,7 @@ withDefaults(
     :class="
       cn(
         orientation === 'horizontal' ? 'h-px w-full' : 'h-full w-px',
-        'bg-border/80',
+        'bg-[hsl(var(--feature-primary)/0.2)]',
         $props.class
       )
     "

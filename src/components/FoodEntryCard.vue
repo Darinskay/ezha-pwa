@@ -40,7 +40,10 @@ const createdLabel = computed(() => {
 </script>
 
 <template>
-  <article class="space-y-3 rounded-2xl border border-border/80 bg-card/85 p-4">
+  <article
+    class="space-y-3 rounded-[1.1rem] border p-3 sm:rounded-[1.25rem] sm:p-4"
+    style="border-color: hsl(var(--feature-primary) / 0.2); background: linear-gradient(158deg, hsl(var(--card) / 0.86), hsl(var(--card) / 0.7));"
+  >
     <div class="flex items-start justify-between gap-4">
       <div>
         <h4 class="text-base font-semibold">
@@ -49,7 +52,7 @@ const createdLabel = computed(() => {
         <p class="text-xs text-muted-foreground">{{ createdLabel }}</p>
       </div>
       <div class="text-right">
-        <p class="text-xl font-semibold leading-none">{{ Math.round(entryWithItems.entry.calories) }}</p>
+        <p class="text-lg font-semibold leading-none sm:text-xl">{{ Math.round(entryWithItems.entry.calories) }}</p>
         <p class="text-xs text-muted-foreground">kcal</p>
       </div>
     </div>
@@ -64,7 +67,8 @@ const createdLabel = computed(() => {
 
     <button
       v-if="showExpand && entryWithItems.items.length > 0"
-      class="inline-flex rounded-full border border-border/70 bg-background px-2.5 py-1 text-xs font-medium text-primary hover:bg-muted/70"
+      class="inline-flex rounded-full border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/70"
+      style="border-color: hsl(var(--feature-primary) / 0.24); background: hsl(var(--feature-soft) / 0.5);"
       @click="expanded = !expanded"
     >
       {{ expanded ? "Hide details" : "Show details" }}
@@ -74,7 +78,8 @@ const createdLabel = computed(() => {
       <li
         v-for="item in entryWithItems.items"
         :key="item.id"
-        class="rounded-xl border border-border/70 bg-muted/45 px-3 py-2 text-sm"
+        class="rounded-xl border px-3 py-2 text-sm"
+        style="border-color: hsl(var(--feature-primary) / 0.16); background: hsl(var(--feature-soft) / 0.4);"
       >
         <div class="flex items-center justify-between">
           <span class="font-medium">{{ item.name }}</span>

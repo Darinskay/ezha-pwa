@@ -37,8 +37,8 @@ const continueWithGoogle = async (): Promise<void> => {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center px-4 py-12">
-    <Card class="w-full max-w-md border-border/75 bg-card/92 p-6 shadow-[0_24px_55px_rgb(15_23_42_/_0.18)] backdrop-blur">
+  <div class="app-root feature feature-auth flex min-h-screen items-center justify-center px-3 py-8 sm:px-4 sm:py-12">
+    <Card class="w-full max-w-md p-4 sm:p-6">
       <div class="space-y-2 text-center">
         <p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Nutrition Assistant</p>
         <h1 class="text-3xl font-semibold tracking-tight">EZHA</h1>
@@ -47,9 +47,9 @@ const continueWithGoogle = async (): Promise<void> => {
         </p>
       </div>
 
-      <div class="mt-6 grid grid-cols-2 rounded-xl border border-border/70 bg-muted/80 p-1">
+      <div class="ios-segment mt-6 grid grid-cols-2">
         <button
-          class="rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+          class="rounded-xl px-3 py-2 text-sm font-semibold transition-colors"
           :class="
             isCreatingAccount
               ? 'bg-card text-foreground shadow-[0_8px_20px_rgb(15_23_42_/_0.12)]'
@@ -60,7 +60,7 @@ const continueWithGoogle = async (): Promise<void> => {
           Create
         </button>
         <button
-          class="rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+          class="rounded-xl px-3 py-2 text-sm font-semibold transition-colors"
           :class="
             !isCreatingAccount
               ? 'bg-card text-foreground shadow-[0_8px_20px_rgb(15_23_42_/_0.12)]'

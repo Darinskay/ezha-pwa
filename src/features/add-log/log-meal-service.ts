@@ -28,6 +28,7 @@ export interface LogMealItem {
   linkedFoodId: string | null;
   aiConfidence: number | null;
   aiNotes: string;
+  isNutritionMissing?: boolean;
 }
 
 export interface UsedMealSources {
@@ -60,6 +61,8 @@ const zeroTotals = (): MacroTotals => ({
   fat: 0
 });
 
+export const MAX_LOG_ITEM_GRAMS = 5000;
+
 const toPositiveNumberOr = (value: number | null, fallback: number): number =>
   value != null && Number.isFinite(value) && value > 0 ? value : fallback;
 
@@ -68,16 +71,31 @@ const normalizeEstimateItems = (items: MacroItemEstimate[]): MacroItemEstimate[]
     .map((item) => ({ ...item, name: item.name.trim() }))
     .filter((item) => item.name.length > 0);
 
-export const parseLogItemGrams = (value: string): number | null => {
+const clampToRange = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
+
+export const normalizeLogItemGrams = (value: string): number | null => {
   const parsed = parseNumberInput(value);
-  if (parsed == null || parsed <= 0) {
+  if (parsed == null || !Number.isFinite(parsed)) {
     return null;
   }
-  return parsed;
+
+  return clampToRange(parsed, 0, MAX_LOG_ITEM_GRAMS);
+};
+
+export const parseLogItemGrams = (value: string): number | null => {
+  const normalized = normalizeLogItemGrams(value);
+  if (normalized == null || normalized <= 0) {
+    return null;
+  }
+  return normalized;
 };
 
 export const macrosFromLogItem = (item: LogMealItem): MacroTotals => {
-  const grams = parseLogItemGrams(item.gramsText);
+  if (item.isNutritionMissing) {
+    return zeroTotals();
+  }
+
+  const grams = normalizeLogItemGrams(item.gramsText);
   if (!grams) {
     return zeroTotals();
   }
@@ -121,26 +139,45 @@ export const buildLogItemFromSavedFood = (food: SavedFood, grams = 100): LogMeal
     origin: "library_food",
     linkedFoodId: food.id,
     aiConfidence: null,
-    aiNotes: "Added from library food"
+    aiNotes: "Added from library food",
+    isNutritionMissing: false
   };
 };
 
 export const buildLogItemsFromSavedMeal = (ingredients: SavedMealIngredient[]): LogMealItem[] =>
-  ingredients.map((ingredient) => ({
-    id: crypto.randomUUID(),
-    name: ingredient.name,
-    gramsText: formatMacro(toPositiveNumberOr(ingredient.grams, 1), 1),
-    macroBasis: "per_original",
-    baseGrams: toPositiveNumberOr(ingredient.grams, 1),
-    baseCalories: ingredient.calories,
-    baseProtein: ingredient.protein,
-    baseCarbs: ingredient.carbs,
-    baseFat: ingredient.fat,
-    origin: "library_meal",
-    linkedFoodId: ingredient.linked_food_id ?? null,
-    aiConfidence: null,
-    aiNotes: "Added from saved meal"
-  }));
+  ingredients.map((ingredient) => {
+    const grams = toPositiveNumberOr(ingredient.grams, 0);
+    const hasMissingNutrition =
+      grams <= 0 ||
+      [ingredient.calories, ingredient.protein, ingredient.carbs, ingredient.fat].some(
+        (value) => !Number.isFinite(value)
+      );
+    const per100Multiplier = hasMissingNutrition ? 0 : 100 / grams;
+
+    const safePer100Calories = hasMissingNutrition ? 0 : ingredient.calories * per100Multiplier;
+    const safePer100Protein = hasMissingNutrition ? 0 : ingredient.protein * per100Multiplier;
+    const safePer100Carbs = hasMissingNutrition ? 0 : ingredient.carbs * per100Multiplier;
+    const safePer100Fat = hasMissingNutrition ? 0 : ingredient.fat * per100Multiplier;
+
+    return {
+      id: crypto.randomUUID(),
+      name: ingredient.name,
+      gramsText: formatMacro(grams, 1),
+      macroBasis: "per_100g",
+      baseGrams: 100,
+      baseCalories: Number.isFinite(safePer100Calories) ? safePer100Calories : 0,
+      baseProtein: Number.isFinite(safePer100Protein) ? safePer100Protein : 0,
+      baseCarbs: Number.isFinite(safePer100Carbs) ? safePer100Carbs : 0,
+      baseFat: Number.isFinite(safePer100Fat) ? safePer100Fat : 0,
+      origin: "library_meal",
+      linkedFoodId: ingredient.linked_food_id ?? null,
+      aiConfidence: null,
+      aiNotes: hasMissingNutrition
+        ? "[PLACEHOLDER] Missing nutrition fields in template item"
+        : "Added from saved meal",
+      isNutritionMissing: hasMissingNutrition
+    } satisfies LogMealItem;
+  });
 
 export const buildLogItemsFromEstimate = (
   estimate: MacroEstimate,
@@ -163,7 +200,8 @@ export const buildLogItemsFromEstimate = (
         origin: "ai",
         linkedFoodId: null,
         aiConfidence: estimate.confidence ?? null,
-        aiNotes: estimate.notes ?? ""
+        aiNotes: estimate.notes ?? "",
+        isNutritionMissing: false
       }
     ];
   }
@@ -181,7 +219,8 @@ export const buildLogItemsFromEstimate = (
     origin: "ai",
     linkedFoodId: null,
     aiConfidence: item.confidence ?? estimate.confidence ?? null,
-    aiNotes: item.notes ?? estimate.notes ?? ""
+    aiNotes: item.notes ?? estimate.notes ?? "",
+    isNutritionMissing: false
   }));
 };
 
@@ -208,7 +247,8 @@ export const buildLabelLogItemsFromEstimate = (
         origin: "ai",
         linkedFoodId: null,
         aiConfidence: estimate.confidence ?? null,
-        aiNotes: estimate.notes ?? ""
+        aiNotes: estimate.notes ?? "",
+        isNutritionMissing: false
       }
     ];
   }
@@ -226,7 +266,8 @@ export const buildLabelLogItemsFromEstimate = (
     origin: "ai",
     linkedFoodId: null,
     aiConfidence: item.confidence ?? estimate.confidence ?? null,
-    aiNotes: item.notes ?? estimate.notes ?? ""
+    aiNotes: item.notes ?? estimate.notes ?? "",
+    isNutritionMissing: false
   }));
 };
 
@@ -287,7 +328,7 @@ export const buildEntryItemsFromLogItems = (
   for (const item of items) {
     const grams = parseLogItemGrams(item.gramsText);
     const name = item.name.trim();
-    if (!grams || !name) {
+    if (!grams || !name || item.isNutritionMissing) {
       continue;
     }
 
@@ -316,7 +357,7 @@ export const buildMealIngredientsFromLogItems = (items: LogMealItem[]): SavedMea
     .map((item) => {
       const grams = parseLogItemGrams(item.gramsText);
       const name = item.name.trim();
-      if (!grams || !name) {
+      if (!grams || !name || item.isNutritionMissing) {
         return null;
       }
 

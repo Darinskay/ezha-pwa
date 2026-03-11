@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
+import { Pencil, Trash2 } from "lucide-vue-next";
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import Input from "@/components/ui/Input.vue";
@@ -79,18 +80,18 @@ const onMealSaved = async (): Promise<void> => {
 </script>
 
 <template>
-  <section class="app-page">
+  <section class="app-page feature feature-library">
     <header class="page-header">
       <h1 class="page-title">Library</h1>
       <p class="page-subtitle">Save foods and meals for quick logging.</p>
     </header>
 
-    <Card class="glass space-y-3 p-4 sm:p-5">
+    <Card class="glass space-y-3 p-3 sm:p-5">
       <Button class="w-full sm:w-auto" @click="openAddFood">Add food</Button>
       <Input v-model="searchText" placeholder="Search your library..." />
     </Card>
 
-    <Card class="space-y-3 p-4 sm:p-5">
+    <Card class="space-y-3 p-3 sm:p-5">
       <div class="flex items-center justify-between gap-3">
         <h2 class="text-lg font-semibold">Saved foods</h2>
         <span class="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
@@ -113,7 +114,7 @@ const onMealSaved = async (): Promise<void> => {
         <article
           v-for="food in filteredFoods"
           :key="food.id"
-          class="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/70 p-3 sm:flex-row sm:items-center sm:justify-between"
+          class="relative flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/70 p-3 pr-12 sm:min-h-[6.5rem]"
         >
           <div class="space-y-1">
             <h3 class="font-semibold">{{ food.name }}</h3>
@@ -121,21 +122,32 @@ const onMealSaved = async (): Promise<void> => {
               {{ food.is_meal ? "Meal" : food.unit_type === "per_100g" ? "Per 100g" : "Per serving" }} ·
               {{ Math.round(food.calories_per_100g) }} kcal /100g
             </p>
-          </div>
-
-          <div class="grid grid-cols-2 gap-2 sm:flex sm:gap-1">
-            <Button v-if="food.is_meal" variant="secondary" size="sm" @click="loggingMeal = food">Log</Button>
-            <Button v-else variant="secondary" size="sm" @click="editingFood = food">Edit</Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              class="text-destructive"
-              :loading="deleteFoodMutation.isPending.value"
-              @click="onDelete(food.id)"
-            >
-              Delete
+            <Button v-if="food.is_meal" variant="secondary" size="sm" class="mt-2 w-fit" @click="loggingMeal = food">
+              Log
             </Button>
           </div>
+
+          <Button
+            v-if="!food.is_meal"
+            variant="ghost"
+            size="sm"
+            class="absolute right-2 top-2 h-8 w-8 rounded-full p-0 text-muted-foreground"
+            :aria-label="`Edit ${food.name}`"
+            @click="editingFood = food"
+          >
+            <Pencil class="size-4" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            class="absolute bottom-2 right-2 h-8 w-8 rounded-full p-0 text-destructive"
+            :loading="deleteFoodMutation.isPending.value"
+            :aria-label="`Delete ${food.name}`"
+            @click="onDelete(food.id)"
+          >
+            <Trash2 class="size-4" />
+          </Button>
         </article>
       </div>
 

@@ -27,7 +27,9 @@ import {
   buildLogItemsFromEstimate,
   buildLogItemsFromSavedMeal,
   buildMealIngredientsFromLogItems,
+  MAX_LOG_ITEM_GRAMS,
   macrosFromLogItem,
+  normalizeLogItemGrams,
   resolveLogMealAnalyzeInputType,
   totalsFromLogItems,
   type LogMealItem
@@ -44,6 +46,8 @@ import { currentUserId } from "@/lib/supabase";
 import type {
   AIItemInput,
   MacroEstimate,
+  MacroTotals,
+  SavedFood,
   SavedFoodDraft
 } from "@/types/domain";
 
@@ -77,7 +81,6 @@ interface AddLogDraft {
   hasUserEditedLibraryName: boolean;
   librarySearchText: string;
   selectedLibraryFoodId: string;
-  libraryFoodQuantityText: string;
   usedPhotoSource: boolean;
   usedTextSource: boolean;
   usedLibrarySource: boolean;
@@ -93,12 +96,21 @@ interface AddLogDraft {
   manualFatText: string;
 }
 
+interface MealTemplateCard {
+  meal: SavedFood;
+  ingredientsCount: number;
+  totals: MacroTotals;
+}
+
 const route = useRoute();
 const router = useRouter();
 const queryClient = useQueryClient();
 
 const mode = computed<"log" | "library">(() => (route.query.mode === "library" ? "library" : "log"));
 const draftKey = computed(() => `add-log:${mode.value}`);
+const MEAL_FAVORITES_KEY = "ezha:meal-template-favorites";
+const MEAL_RECENTS_KEY = "ezha:meal-template-recents";
+const MAX_RECENT_MEALS = 8;
 
 const selectedLogWays = ref<LogWay[]>([]);
 const selectedPhotoPicker = ref<"camera" | "gallery" | null>(null);
@@ -107,6 +119,8 @@ const entryMode = ref<"description" | "list">("description");
 const descriptionText = ref("");
 const items = ref<DraftItem[]>([{ id: crypto.randomUUID(), name: "", gramsText: "" }]);
 const logItems = ref<LogMealItem[]>([]);
+const lastValidGramsByItemId = ref<Record<string, string>>({});
+const lastValidLibraryFoodGramsByFoodId = ref<Record<string, string>>({});
 
 const cameraFileInput = ref<HTMLInputElement | null>(null);
 const galleryFileInput = ref<HTMLInputElement | null>(null);
@@ -143,7 +157,12 @@ const usedPhotoMode = ref<"food_photo" | "label_photo" | null>(null);
 const latestLabelItemId = ref<string | null>(null);
 
 const selectedLibraryFoodId = ref("");
-const libraryFoodQuantityText = ref("100");
+const favoriteMealIds = ref<string[]>([]);
+const recentMealIds = ref<string[]>([]);
+const mealTemplateCards = ref<MealTemplateCard[]>([]);
+const isLoadingMealTemplates = ref(false);
+const mealTemplateError = ref<string | null>(null);
+const gramsValidationMessage = ref<string | null>(null);
 
 const libraryEntryMode = ref<"photo" | "manual">("photo");
 const manualUnitType = ref<"per_100g" | "per_serving">("per_100g");
@@ -165,15 +184,38 @@ const savedFoodsQuery = useQuery({
 });
 
 const allSavedFoods = computed(() => savedFoodsQuery.data.value ?? []);
-const filteredLibraryFoods = computed(() => {
+const allSavedMeals = computed(() => allSavedFoods.value.filter((food) => food.is_meal));
+const mealTemplateById = computed(() => new Map(mealTemplateCards.value.map((card) => [card.meal.id, card])));
+const selectedMealTemplate = computed(() => mealTemplateById.value.get(selectedLibraryFoodId.value) ?? null);
+
+const filteredMealTemplates = computed(() => {
   const search = librarySearchText.value.trim().toLowerCase();
-  if (!search) return allSavedFoods.value;
-  return allSavedFoods.value.filter((food) => food.name.toLowerCase().includes(search));
+  if (!search) return mealTemplateCards.value;
+  return mealTemplateCards.value.filter((card) => card.meal.name.toLowerCase().includes(search));
 });
 
-const selectedLibraryFood = computed(() => {
-  return allSavedFoods.value.find((food) => food.id === selectedLibraryFoodId.value) ?? null;
+const filteredLibraryFoods = computed(() => {
+  const search = librarySearchText.value.trim().toLowerCase();
+  const foods = allSavedFoods.value.filter((food) => !food.is_meal);
+  if (!search) return foods;
+  return foods.filter((food) => food.name.toLowerCase().includes(search));
 });
+
+const favoriteMealTemplates = computed(() =>
+  filteredMealTemplates.value.filter((card) => favoriteMealIds.value.includes(card.meal.id))
+);
+
+const recentMealTemplates = computed(() =>
+  recentMealIds.value
+    .map((id) => filteredMealTemplates.value.find((card) => card.meal.id === id) ?? null)
+    .filter((card): card is MealTemplateCard => !!card && !favoriteMealIds.value.includes(card.meal.id))
+);
+
+const otherMealTemplates = computed(() =>
+  filteredMealTemplates.value.filter(
+    (card) => !favoriteMealIds.value.includes(card.meal.id) && !recentMealIds.value.includes(card.meal.id)
+  )
+);
 
 const manualPerServingPreview = computed(() => {
   const calories = parseNumberInput(manualCaloriesText.value);
@@ -220,7 +262,6 @@ const hasPhotoInput = computed(() => {
 });
 const hasAnyLogItems = computed(() => buildMealIngredientsFromLogItems(logItems.value).length > 0);
 const logTotals = computed(() => totalsFromLogItems(logItems.value));
-const canAddSelectedLibraryItem = computed(() => !!selectedLibraryFood.value && !isAnalyzing.value && !isSaving.value);
 const labelEditableItem = computed(() =>
   latestLabelItemId.value ? logItems.value.find((item) => item.id === latestLabelItemId.value) ?? null : null
 );
@@ -256,6 +297,142 @@ const parseMacro = (value: string): number | null => parseNumberInput(value);
 const onLibraryNameInput = (nextName: string): void => {
   hasUserEditedLibraryName.value = true;
   libraryName.value = nextName;
+};
+
+const readIdArrayFromStorage = (key: string): string[] => {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((value): value is string => typeof value === "string");
+  } catch {
+    return [];
+  }
+};
+
+const writeIdArrayToStorage = (key: string, ids: string[]): void => {
+  window.localStorage.setItem(key, JSON.stringify(ids));
+};
+
+const defaultGramsTextForItem = (item: LogMealItem): string => {
+  const fallback = item.baseGrams > 0 ? item.baseGrams : 100;
+  return formatMacro(fallback, 1);
+};
+
+const rememberValidGramsForItem = (item: LogMealItem): void => {
+  const normalized = normalizeLogItemGrams(item.gramsText);
+  if (normalized == null) return;
+
+  const normalizedText = formatMacro(normalized, 1);
+  lastValidGramsByItemId.value[item.id] = normalizedText;
+  if (item.origin === "library_food" && item.linkedFoodId) {
+    lastValidLibraryFoodGramsByFoodId.value[item.linkedFoodId] = normalizedText;
+  }
+};
+
+const syncRememberedLogItemGrams = (): void => {
+  const nextIds = new Set(logItems.value.map((item) => item.id));
+  for (const id of Object.keys(lastValidGramsByItemId.value)) {
+    if (!nextIds.has(id)) {
+      delete lastValidGramsByItemId.value[id];
+    }
+  }
+
+  for (const item of logItems.value) {
+    rememberValidGramsForItem(item);
+  }
+};
+
+const fallbackGramsTextForItem = (item: LogMealItem): string => {
+  const byItemId = lastValidGramsByItemId.value[item.id];
+  if (byItemId) return byItemId;
+
+  if (item.origin === "library_food" && item.linkedFoodId) {
+    const byFoodId = lastValidLibraryFoodGramsByFoodId.value[item.linkedFoodId];
+    if (byFoodId) return byFoodId;
+  }
+
+  return defaultGramsTextForItem(item);
+};
+
+const loadMealPickerPreferences = (): void => {
+  favoriteMealIds.value = readIdArrayFromStorage(MEAL_FAVORITES_KEY);
+  recentMealIds.value = readIdArrayFromStorage(MEAL_RECENTS_KEY);
+};
+
+const pushRecentMealId = (mealId: string): void => {
+  recentMealIds.value = [mealId, ...recentMealIds.value.filter((id) => id !== mealId)].slice(0, MAX_RECENT_MEALS);
+};
+
+const normalizeLogItemGramsText = (item: LogMealItem): void => {
+  const normalized = normalizeLogItemGrams(item.gramsText);
+  if (normalized == null) {
+    item.gramsText = fallbackGramsTextForItem(item);
+    rememberValidGramsForItem(item);
+    return;
+  }
+
+  if (normalized >= MAX_LOG_ITEM_GRAMS && parseNumberInput(item.gramsText) != null) {
+    gramsValidationMessage.value = `Max grams per item is ${MAX_LOG_ITEM_GRAMS}g.`;
+  }
+  item.gramsText = formatMacro(normalized, 1);
+  rememberValidGramsForItem(item);
+};
+
+const adjustLogItemGrams = (item: LogMealItem, delta: number): void => {
+  const current = normalizeLogItemGrams(item.gramsText) ?? 0;
+  const next = Math.min(Math.max(current + delta, 0), MAX_LOG_ITEM_GRAMS);
+  item.gramsText = formatMacro(next, 1);
+  rememberValidGramsForItem(item);
+  if (next >= MAX_LOG_ITEM_GRAMS && delta > 0) {
+    gramsValidationMessage.value = `Max grams per item is ${MAX_LOG_ITEM_GRAMS}g.`;
+  }
+};
+
+const normalizeAllLogItemGrams = (): void => {
+  for (const item of logItems.value) {
+    normalizeLogItemGramsText(item);
+  }
+};
+
+const loadMealTemplateCards = async (): Promise<void> => {
+  const meals = allSavedMeals.value;
+  if (meals.length === 0) {
+    mealTemplateCards.value = [];
+    return;
+  }
+
+  isLoadingMealTemplates.value = true;
+  mealTemplateError.value = null;
+  try {
+    const groupedIngredients = await savedFoodRepository.fetchMealIngredientsByMealIds(meals.map((meal) => meal.id));
+    mealTemplateCards.value = meals.map((meal) => {
+      const ingredients = groupedIngredients.get(meal.id) ?? [];
+      const totals = ingredients.reduce<MacroTotals>(
+        (acc, ingredient) => ({
+          calories: acc.calories + ingredient.calories,
+          protein: acc.protein + ingredient.protein,
+          carbs: acc.carbs + ingredient.carbs,
+          fat: acc.fat + ingredient.fat
+        }),
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+      );
+      return {
+        meal,
+        ingredientsCount: ingredients.length,
+        totals
+      } satisfies MealTemplateCard;
+    });
+    if (selectedLibraryFoodId.value && !mealTemplateCards.value.some((card) => card.meal.id === selectedLibraryFoodId.value)) {
+      selectedLibraryFoodId.value = "";
+    }
+  } catch (error) {
+    mealTemplateCards.value = [];
+    mealTemplateError.value = error instanceof Error ? error.message : "Unable to load meal templates.";
+  } finally {
+    isLoadingMealTemplates.value = false;
+  }
 };
 
 const analysisInputType = computed(() => {
@@ -370,10 +547,6 @@ const validateItemInputs = (requireAtLeastOne: boolean): AIItemInput[] | null =>
   return parsed;
 };
 
-const appendLogItems = (nextItems: LogMealItem[]): void => {
-  logItems.value = [...logItems.value, ...nextItems];
-};
-
 const replaceAiLogItems = (nextAiItems: LogMealItem[]): void => {
   const nonAiItems = logItems.value.filter((item) => item.origin !== "ai");
   logItems.value = [...nonAiItems, ...nextAiItems];
@@ -384,6 +557,16 @@ const removeLogItem = (id: string): void => {
   if (latestLabelItemId.value === id) {
     latestLabelItemId.value = null;
   }
+};
+
+const clearMealDraft = (): void => {
+  selectedLibraryFoodId.value = "";
+  logItems.value = [];
+  lastValidGramsByItemId.value = {};
+  lastValidLibraryFoodGramsByFoodId.value = {};
+  usedLibrarySource.value = false;
+  latestLabelItemId.value = null;
+  gramsValidationMessage.value = null;
 };
 
 const syncLabelEditorFromItem = (): void => {
@@ -405,28 +588,52 @@ const uploadIfNeeded = async (): Promise<string | null> => {
   return path;
 };
 
-const addSelectedLibraryFood = async (): Promise<void> => {
-  if (!selectedLibraryFood.value) {
-    errorMessage.value = "Choose a saved food or meal first.";
-    return;
-  }
+const toggleFavoriteMeal = (mealId: string): void => {
+  favoriteMealIds.value = favoriteMealIds.value.includes(mealId)
+    ? favoriteMealIds.value.filter((id) => id !== mealId)
+    : [...favoriteMealIds.value, mealId];
+};
 
+const selectMealTemplate = async (mealId: string): Promise<void> => {
+  if (!mealId) return;
+  selectedLibraryFoodId.value = mealId;
   errorMessage.value = null;
   saveMessage.value = null;
+  gramsValidationMessage.value = null;
 
-  if (selectedLibraryFood.value.is_meal) {
-    try {
-      const ingredients = await savedFoodRepository.fetchMealIngredients(selectedLibraryFood.value.id);
-      appendLogItems(buildLogItemsFromSavedMeal(ingredients));
-      usedLibrarySource.value = true;
-    } catch (error) {
-      errorMessage.value = error instanceof Error ? error.message : "Unable to add meal ingredients.";
+  try {
+    const ingredients = await savedFoodRepository.fetchMealIngredients(mealId);
+    const mapped = buildLogItemsFromSavedMeal(ingredients);
+    logItems.value = [...logItems.value, ...mapped];
+    usedLibrarySource.value = true;
+    latestLabelItemId.value = null;
+    pushRecentMealId(mealId);
+    if (mapped.some((item) => item.isNutritionMissing)) {
+      errorMessage.value = "[PLACEHOLDER] Some items are missing nutrition fields and are blocked from save.";
     }
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "Unable to load meal template.";
+  }
+};
+
+const selectLibraryFood = (foodId: string): void => {
+  const food = allSavedFoods.value.find((item) => item.id === foodId && !item.is_meal);
+  if (!food) {
+    errorMessage.value = "Unable to load selected library food.";
     return;
   }
 
-  appendLogItems([buildLogItemFromSavedFood(selectedLibraryFood.value, 100)]);
+  selectedLibraryFoodId.value = "";
+  errorMessage.value = null;
+  saveMessage.value = null;
+  gramsValidationMessage.value = null;
+  const rememberedGramsText = lastValidLibraryFoodGramsByFoodId.value[food.id];
+  const rememberedGrams = rememberedGramsText != null ? normalizeLogItemGrams(rememberedGramsText) : null;
+  const nextItem = buildLogItemFromSavedFood(food, rememberedGrams ?? 100);
+  logItems.value = [...logItems.value, nextItem];
+  rememberValidGramsForItem(nextItem);
   usedLibrarySource.value = true;
+  latestLabelItemId.value = null;
 };
 
 const analyze = async (): Promise<void> => {
@@ -558,8 +765,19 @@ const saveLogEntry = async (): Promise<void> => {
     return;
   }
 
+  normalizeAllLogItemGrams();
+  gramsValidationMessage.value = null;
+
+  const blockedItems = logItems.value.filter(
+    (item) => item.isNutritionMissing && (normalizeLogItemGrams(item.gramsText) ?? 0) > 0
+  );
+  if (blockedItems.length > 0) {
+    errorMessage.value = "[PLACEHOLDER] Remove blocked items with missing nutrition before saving.";
+    return;
+  }
+
   if (!canSaveLog.value) {
-    errorMessage.value = "Add at least one item before saving.";
+    errorMessage.value = "At least one item must have grams greater than 0.";
     return;
   }
 
@@ -738,42 +956,53 @@ const applyLabelMacroEdits = (): void => {
   syncLabelEditorFromItem();
 };
 
+const resetAddLogState = (): void => {
+  selectedLogWays.value = [];
+  selectedPhotoPicker.value = null;
+  entryMode.value = "description";
+  descriptionText.value = "";
+  items.value = [{ id: crypto.randomUUID(), name: "", gramsText: "" }];
+  logItems.value = [];
+  lastValidGramsByItemId.value = {};
+  lastValidLibraryFoodGramsByFoodId.value = {};
+  isLabelPhoto.value = false;
+  labelGramsText.value = "";
+  caloriesText.value = "";
+  proteinText.value = "";
+  carbsText.value = "";
+  fatText.value = "";
+  saveToLibrary.value = false;
+  libraryName.value = "";
+  hasUserEditedLibraryName.value = false;
+  librarySearchText.value = "";
+  selectedLibraryFoodId.value = "";
+  usedPhotoSource.value = false;
+  usedTextSource.value = false;
+  usedLibrarySource.value = false;
+  usedPhotoMode.value = null;
+  latestLabelItemId.value = null;
+  libraryEntryMode.value = "photo";
+  manualUnitType.value = "per_100g";
+  manualServingSizeText.value = "";
+  manualServingUnit.value = "serving";
+  manualCaloriesText.value = "";
+  manualProteinText.value = "";
+  manualCarbsText.value = "";
+  manualFatText.value = "";
+  labelBaseEstimate = null;
+  estimate.value = null;
+};
+
 const hydrateFromDraft = async (): Promise<void> => {
+  if (mode.value === "log") {
+    resetAddLogState();
+    await clearDraft(draftKey.value);
+    return;
+  }
+
   const draft = await loadDraft<AddLogDraft>(draftKey.value);
   if (!draft) {
-    selectedLogWays.value = [];
-    selectedPhotoPicker.value = null;
-    entryMode.value = "description";
-    descriptionText.value = "";
-    items.value = [{ id: crypto.randomUUID(), name: "", gramsText: "" }];
-    logItems.value = [];
-    isLabelPhoto.value = false;
-    labelGramsText.value = "";
-    caloriesText.value = "";
-    proteinText.value = "";
-    carbsText.value = "";
-    fatText.value = "";
-    saveToLibrary.value = false;
-    libraryName.value = "";
-    hasUserEditedLibraryName.value = false;
-    librarySearchText.value = "";
-    selectedLibraryFoodId.value = "";
-    libraryFoodQuantityText.value = "100";
-    usedPhotoSource.value = false;
-    usedTextSource.value = false;
-    usedLibrarySource.value = false;
-    usedPhotoMode.value = null;
-    latestLabelItemId.value = null;
-    libraryEntryMode.value = "photo";
-    manualUnitType.value = "per_100g";
-    manualServingSizeText.value = "";
-    manualServingUnit.value = "serving";
-    manualCaloriesText.value = "";
-    manualProteinText.value = "";
-    manualCarbsText.value = "";
-    manualFatText.value = "";
-    labelBaseEstimate = null;
-    estimate.value = null;
+    resetAddLogState();
     return;
   }
 
@@ -783,6 +1012,7 @@ const hydrateFromDraft = async (): Promise<void> => {
   descriptionText.value = draft.descriptionText;
   items.value = draft.items.length ? draft.items : [{ id: crypto.randomUUID(), name: "", gramsText: "" }];
   logItems.value = draft.logItems ?? [];
+  syncRememberedLogItemGrams();
   isLabelPhoto.value = draft.isLabelPhoto;
   labelGramsText.value = draft.labelGramsText;
   caloriesText.value = draft.caloriesText;
@@ -794,7 +1024,6 @@ const hydrateFromDraft = async (): Promise<void> => {
   hasUserEditedLibraryName.value = draft.hasUserEditedLibraryName ?? false;
   librarySearchText.value = draft.librarySearchText ?? "";
   selectedLibraryFoodId.value = draft.selectedLibraryFoodId;
-  libraryFoodQuantityText.value = draft.libraryFoodQuantityText || "100";
   usedPhotoSource.value = draft.usedPhotoSource ?? false;
   usedTextSource.value = draft.usedTextSource ?? false;
   usedLibrarySource.value = draft.usedLibrarySource ?? false;
@@ -811,6 +1040,10 @@ const hydrateFromDraft = async (): Promise<void> => {
 };
 
 const persistDraft = async (): Promise<void> => {
+  if (mode.value === "log") {
+    return;
+  }
+
   const draft: AddLogDraft = {
     selectedLogWays: selectedLogWays.value,
     selectedPhotoPicker: selectedPhotoPicker.value,
@@ -829,7 +1062,6 @@ const persistDraft = async (): Promise<void> => {
     hasUserEditedLibraryName: hasUserEditedLibraryName.value,
     librarySearchText: librarySearchText.value,
     selectedLibraryFoodId: selectedLibraryFoodId.value,
-    libraryFoodQuantityText: libraryFoodQuantityText.value,
     usedPhotoSource: usedPhotoSource.value,
     usedTextSource: usedTextSource.value,
     usedLibrarySource: usedLibrarySource.value,
@@ -875,7 +1107,6 @@ watchDebounced(
     hasUserEditedLibraryName,
     librarySearchText,
     selectedLibraryFoodId,
-    libraryFoodQuantityText,
     usedPhotoSource,
     usedTextSource,
     usedLibrarySource,
@@ -915,6 +1146,14 @@ watch(
 );
 
 watch(
+  logItems,
+  () => {
+    syncRememberedLogItemGrams();
+  },
+  { deep: true, immediate: true }
+);
+
+watch(
   [isLabelPhoto, labelGramsText],
   () => {
     applyLabelScaling();
@@ -930,13 +1169,6 @@ watch(
 );
 
 watch(
-  () => selectedLibraryFoodId.value,
-  () => {
-    libraryFoodQuantityText.value = "100";
-  }
-);
-
-watch(
   [mode, logTotals, latestLabelItemId],
   () => {
     if (mode.value !== "log") return;
@@ -948,7 +1180,32 @@ watch(
   { immediate: true, deep: true }
 );
 
+watch(
+  allSavedMeals,
+  () => {
+    void loadMealTemplateCards();
+  },
+  { immediate: true, deep: true }
+);
+
+watch(
+  favoriteMealIds,
+  (ids) => {
+    writeIdArrayToStorage(MEAL_FAVORITES_KEY, ids);
+  },
+  { deep: true }
+);
+
+watch(
+  recentMealIds,
+  (ids) => {
+    writeIdArrayToStorage(MEAL_RECENTS_KEY, ids);
+  },
+  { deep: true }
+);
+
 onMounted(() => {
+  loadMealPickerPreferences();
   void savedFoodsQuery.refetch();
 });
 
@@ -960,7 +1217,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="app-page">
+  <section class="app-page feature feature-add-log">
     <header class="flex items-start justify-between gap-3">
       <div class="page-header">
         <h1 class="page-title">
@@ -973,7 +1230,7 @@ onUnmounted(() => {
       <Button variant="ghost" size="sm" @click="router.back()">Close</Button>
     </header>
 
-    <Card v-if="mode === 'log'" class="glass space-y-4 p-4 sm:p-5">
+    <Card v-if="mode === 'log'" class="glass space-y-4 p-3 sm:p-5">
       <div class="space-y-2">
         <p class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Choose how to log</p>
         <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1003,62 +1260,175 @@ onUnmounted(() => {
             :variant="isLogWaySelected('library') ? 'default' : 'outline'"
             @click="toggleLogWay('library')"
           >
-            Library
+            From library
           </Button>
         </div>
       </div>
     </Card>
 
-    <Card v-if="mode === 'log' && isLibraryWaySelected" class="glass space-y-4 p-4 sm:p-5">
+    <Card v-if="mode === 'log' && isLibraryWaySelected" class="glass space-y-4 p-3 sm:p-5">
       <div class="space-y-2">
-        <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Library search</label>
-        <Input v-model="librarySearchText" placeholder="Search saved foods and meals" />
+        <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Search library</label>
+        <Input v-model="librarySearchText" placeholder="Search meals or foods..." />
       </div>
 
-      <div class="space-y-2">
-        <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Quick library pick</label>
-        <SelectField v-model="selectedLibraryFoodId">
-          <option value="">Choose a saved food or meal...</option>
-          <option v-for="food in filteredLibraryFoods" :key="food.id" :value="food.id">
-            {{ food.name }}{{ food.is_meal ? " (meal)" : "" }}
-          </option>
-        </SelectField>
+      <div v-if="isLoadingMealTemplates" class="rounded-xl border border-dashed border-border/80 p-5 text-center text-sm text-muted-foreground">
+        Loading meal templates...
       </div>
 
-      <div v-if="selectedLibraryFood" class="space-y-2 rounded-2xl border border-border/70 bg-background/80 p-3">
-        <p class="text-sm font-semibold">Selected: {{ selectedLibraryFood.name }}</p>
-        <Input
-          v-if="!selectedLibraryFood.is_meal"
-          v-model="libraryFoodQuantityText"
-          type="number"
-          min="0"
-          step="0.1"
-          placeholder="Grams (default 100)"
-        />
-        <p v-else class="rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          This saved meal adds all ingredients as separate log items.
-        </p>
-        <Button size="sm" :disabled="!canAddSelectedLibraryItem" @click="addSelectedLibraryFood">Add to log</Button>
+      <p v-else-if="mealTemplateError" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        {{ mealTemplateError }}
+      </p>
+
+      <div
+        v-else-if="filteredMealTemplates.length === 0 && filteredLibraryFoods.length === 0"
+        class="rounded-xl border border-dashed border-border/80 p-5 text-center text-sm text-muted-foreground"
+      >
+        No saved library items found.
+      </div>
+
+      <div v-else class="space-y-4">
+        <section v-if="favoriteMealTemplates.length" class="space-y-2">
+          <p class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Favorites</p>
+          <article
+            v-for="template in favoriteMealTemplates"
+            :key="template.meal.id"
+            class="space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3"
+          >
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <h4 class="text-sm font-semibold">{{ template.meal.name }}</h4>
+                <p class="text-xs text-muted-foreground">
+                  {{ template.ingredientsCount }} items ·
+                  {{ formatMacro(template.totals.calories, 1) }} kcal ·
+                  P{{ formatMacro(template.totals.protein, 1) }} ·
+                  C{{ formatMacro(template.totals.carbs, 1) }} ·
+                  F{{ formatMacro(template.totals.fat, 1) }}
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                <Button variant="ghost" size="sm" @click="toggleFavoriteMeal(template.meal.id)">★</Button>
+                <Button
+                  size="sm"
+                  :variant="selectedLibraryFoodId === template.meal.id ? 'secondary' : 'default'"
+                  @click="selectMealTemplate(template.meal.id)"
+                >
+                  Add meal
+                </Button>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section v-if="recentMealTemplates.length" class="space-y-2">
+          <p class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Recent</p>
+          <article
+            v-for="template in recentMealTemplates"
+            :key="template.meal.id"
+            class="space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3"
+          >
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <h4 class="text-sm font-semibold">{{ template.meal.name }}</h4>
+                <p class="text-xs text-muted-foreground">
+                  {{ template.ingredientsCount }} items ·
+                  {{ formatMacro(template.totals.calories, 1) }} kcal ·
+                  P{{ formatMacro(template.totals.protein, 1) }} ·
+                  C{{ formatMacro(template.totals.carbs, 1) }} ·
+                  F{{ formatMacro(template.totals.fat, 1) }}
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                <Button variant="ghost" size="sm" @click="toggleFavoriteMeal(template.meal.id)">
+                  {{ favoriteMealIds.includes(template.meal.id) ? "★" : "☆" }}
+                </Button>
+                <Button
+                  size="sm"
+                  :variant="selectedLibraryFoodId === template.meal.id ? 'secondary' : 'default'"
+                  @click="selectMealTemplate(template.meal.id)"
+                >
+                  Add meal
+                </Button>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section v-if="otherMealTemplates.length" class="space-y-2">
+          <p class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">All meals</p>
+          <article
+            v-for="template in otherMealTemplates"
+            :key="template.meal.id"
+            class="space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3"
+          >
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <h4 class="text-sm font-semibold">{{ template.meal.name }}</h4>
+                <p class="text-xs text-muted-foreground">
+                  {{ template.ingredientsCount }} items ·
+                  {{ formatMacro(template.totals.calories, 1) }} kcal ·
+                  P{{ formatMacro(template.totals.protein, 1) }} ·
+                  C{{ formatMacro(template.totals.carbs, 1) }} ·
+                  F{{ formatMacro(template.totals.fat, 1) }}
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                <Button variant="ghost" size="sm" @click="toggleFavoriteMeal(template.meal.id)">
+                  {{ favoriteMealIds.includes(template.meal.id) ? "★" : "☆" }}
+                </Button>
+                <Button
+                  size="sm"
+                  :variant="selectedLibraryFoodId === template.meal.id ? 'secondary' : 'default'"
+                  @click="selectMealTemplate(template.meal.id)"
+                >
+                  Add meal
+                </Button>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section v-if="filteredLibraryFoods.length" class="space-y-2">
+          <p class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Foods</p>
+          <article
+            v-for="food in filteredLibraryFoods"
+            :key="food.id"
+            class="space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3"
+          >
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <h4 class="text-sm font-semibold">{{ food.name }}</h4>
+                <p class="text-xs text-muted-foreground">
+                  {{ formatMacro(food.calories_per_100g, 1) }} kcal/100g ·
+                  P{{ formatMacro(food.protein_per_100g, 1) }} ·
+                  C{{ formatMacro(food.carbs_per_100g, 1) }} ·
+                  F{{ formatMacro(food.fat_per_100g, 1) }}
+                </p>
+              </div>
+              <Button size="sm" @click="selectLibraryFood(food.id)">Add food</Button>
+            </div>
+          </article>
+        </section>
       </div>
     </Card>
 
-    <Card v-if="mode === 'library'" class="space-y-4 p-4 sm:p-5">
+    <Card v-if="mode === 'library'" class="space-y-4 p-3 sm:p-5">
       <TabsRoot v-model="libraryEntryMode">
-        <TabsList class="inline-flex rounded-xl border border-border/70 bg-muted/70 p-1">
+        <TabsList class="ios-segment">
           <TabsTrigger
             value="photo"
-            class="rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors data-[state=active]:bg-card data-[state=active]:text-foreground"
+            class="ios-segment-trigger"
           >
             Photo
           </TabsTrigger>
           <TabsTrigger
             value="manual"
-            class="rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors data-[state=active]:bg-card data-[state=active]:text-foreground"
+            class="ios-segment-trigger"
           >
             Manual
           </TabsTrigger>
         </TabsList>
-        <TabsIndicator class="h-[2px] bg-primary transition-all" />
+        <TabsIndicator class="h-[2px] bg-[hsl(var(--feature-primary))] transition-all" />
 
         <TabsContent value="manual" class="mt-4 space-y-3">
           <div class="space-y-1">
@@ -1121,18 +1491,18 @@ onUnmounted(() => {
       </TabsRoot>
     </Card>
 
-    <Card v-if="mode === 'log' ? isTextWaySelected || isPhotoWaySelected : libraryEntryMode === 'photo'" class="space-y-4 p-4 sm:p-5">
+    <Card v-if="mode === 'log' ? isTextWaySelected || isPhotoWaySelected : libraryEntryMode === 'photo'" class="space-y-4 p-3 sm:p-5">
       <TabsRoot v-if="mode === 'log' && isTextWaySelected" v-model="entryMode">
-        <TabsList class="inline-flex rounded-xl border border-border/70 bg-muted/70 p-1">
+        <TabsList class="ios-segment">
           <TabsTrigger
             value="description"
-            class="rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors data-[state=active]:bg-card data-[state=active]:text-foreground"
+            class="ios-segment-trigger"
           >
             Description
           </TabsTrigger>
           <TabsTrigger
             value="list"
-            class="rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors data-[state=active]:bg-card data-[state=active]:text-foreground"
+            class="ios-segment-trigger"
           >
             List
           </TabsTrigger>
@@ -1238,7 +1608,7 @@ onUnmounted(() => {
       </Button>
     </Card>
 
-    <Card v-if="mode === 'library' ? !!estimate : hasAnyLogItems" class="space-y-4 p-4 sm:p-5">
+    <Card v-if="mode === 'library' ? !!estimate : logItems.length > 0" class="space-y-4 p-3 sm:p-5">
       <div v-if="mode === 'library'" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div class="space-y-1">
           <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Calories</label>
@@ -1271,7 +1641,19 @@ onUnmounted(() => {
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div class="space-y-1">
               <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Grams (g)</label>
-              <Input v-model="item.gramsText" type="number" min="0" step="0.1" placeholder="Grams (g)" />
+              <div class="flex items-center gap-2">
+                <Button variant="secondary" size="sm" @click="adjustLogItemGrams(item, -5)">-</Button>
+                <Input
+                  v-model="item.gramsText"
+                  type="number"
+                  min="0"
+                  :max="String(MAX_LOG_ITEM_GRAMS)"
+                  step="0.1"
+                  placeholder="Grams (g)"
+                  @blur="normalizeLogItemGramsText(item)"
+                />
+                <Button variant="secondary" size="sm" @click="adjustLogItemGrams(item, 5)">+</Button>
+              </div>
             </div>
             <p class="rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               {{ formatMacro(macrosFromLogItem(item).calories, 1) }} kcal ·
@@ -1280,6 +1662,9 @@ onUnmounted(() => {
               F{{ formatMacro(macrosFromLogItem(item).fat, 1) }}
             </p>
           </div>
+          <p v-if="item.isNutritionMissing" class="rounded-xl border border-amber-300/40 bg-amber-100/40 px-3 py-2 text-xs text-amber-700">
+            [PLACEHOLDER] Missing nutrition fields for this template item. It is blocked from save.
+          </p>
         </article>
 
         <div class="rounded-xl border border-border/70 bg-muted/40 p-3 text-sm">
@@ -1300,6 +1685,10 @@ onUnmounted(() => {
           <Button size="sm" variant="secondary" @click="applyLabelMacroEdits">Apply label macros</Button>
         </div>
 
+        <p v-if="gramsValidationMessage" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {{ gramsValidationMessage }}
+        </p>
+
         <div class="space-y-2">
           <label class="inline-flex items-center gap-2 text-sm">
             <input v-model="saveToLibrary" type="checkbox" class="size-4 rounded border-border accent-primary" />
@@ -1313,9 +1702,10 @@ onUnmounted(() => {
           />
         </div>
 
-        <Button class="w-full sm:w-auto" :loading="isSaving" :disabled="!canSaveLog" @click="saveLogEntry">
-          Save log
-        </Button>
+        <div class="sticky bottom-2 grid grid-cols-1 gap-2 rounded-2xl border border-border/70 bg-card/95 p-3 backdrop-blur sm:grid-cols-2">
+          <Button variant="ghost" @click="clearMealDraft">Cancel</Button>
+          <Button :loading="isSaving" :disabled="!canSaveLog" @click="saveLogEntry">Save meal</Button>
+        </div>
       </template>
 
       <div v-if="mode === 'library'" class="space-y-2">
@@ -1327,8 +1717,8 @@ onUnmounted(() => {
     <p v-if="errorMessage" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">{{ errorMessage }}</p>
     <p v-if="saveMessage" class="rounded-xl border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary">{{ saveMessage }}</p>
 
-    <div v-if="pendingDuplicate" class="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4 backdrop-blur-sm">
-      <Card class="w-full max-w-md space-y-4 border-border/80 bg-card/96 p-4 sm:p-5">
+    <div v-if="pendingDuplicate" class="dialog-overlay feature feature-add-log">
+      <Card class="w-full max-w-none rounded-t-[1.2rem] rounded-b-none space-y-4 border-border/80 bg-card/96 p-3 sm:max-w-md sm:rounded-[1.4rem] sm:p-5">
         <h3 class="text-lg font-semibold">Food already exists</h3>
         <p class="text-sm text-muted-foreground">
           "{{ pendingDuplicate.existing.name }}" is already in your Library.

@@ -46,8 +46,8 @@ const save = (): void => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4 backdrop-blur-sm">
-    <Card class="w-full max-w-lg space-y-4 border-border/80 bg-card/96 p-4 sm:p-5">
+  <div class="dialog-overlay feature feature-settings">
+    <Card class="w-full max-w-none rounded-t-[1.2rem] rounded-b-none space-y-4 border-border/80 bg-card/96 p-3 sm:max-w-lg sm:rounded-[1.4rem] sm:p-5">
       <div class="flex items-center justify-between">
         <h3 class="text-lg font-semibold">{{ target ? "Edit Target" : "New Target" }}</h3>
         <Button variant="ghost" size="sm" @click="emit('close')">Close</Button>

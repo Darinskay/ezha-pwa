@@ -97,13 +97,13 @@ const percent = (value: number, target: number): number => {
 </script>
 
 <template>
-  <section class="app-page">
+  <section class="app-page feature feature-history">
     <header class="page-header">
       <h1 class="page-title">History</h1>
       <p class="page-subtitle">Previous completed days (up to last 60 days).</p>
     </header>
 
-    <Card class="space-y-3 p-4 sm:p-5">
+    <Card class="space-y-3 p-3 sm:p-5">
       <div v-if="historyQuery.isPending.value" class="rounded-xl border border-dashed border-border/80 py-8 text-center text-sm text-muted-foreground">
         Loading history...
       </div>
