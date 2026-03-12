@@ -15,7 +15,7 @@ const tabs = [
   { name: "settings", label: "Settings", icon: Settings }
 ] as const;
 
-const hideTabs = computed(() => route.name === "add-log");
+const hideTabs = computed(() => route.name === "add-log" || route.name === "log-meal-library-select");
 
 const featureClass = computed(() => {
   const name = String(route.name ?? "");
@@ -24,7 +24,7 @@ const featureClass = computed(() => {
   if (name === "library") return "feature-library";
   if (name === "history") return "feature-history";
   if (name === "settings") return "feature-settings";
-  if (name === "add-log") return "feature-add-log";
+  if (name === "add-log" || name === "log-meal-library-select") return "feature-add-log";
   return "feature-today";
 });
 

@@ -54,6 +54,11 @@ const router = createRouter({
           path: "log/new",
           name: "add-log",
           component: () => import("@/features/add-log/AddLogPage.vue")
+        },
+        {
+          path: "log-meal/library-select",
+          name: "log-meal-library-select",
+          component: () => import("@/features/add-log/LogMealLibrarySelectPage.vue")
         }
       ]
     }

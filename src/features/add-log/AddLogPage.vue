@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { TabsContent, TabsIndicator, TabsList, TabsRoot, TabsTrigger } from "radix-vue";
-import { useQuery, useQueryClient } from "@tanstack/vue-query";
+import { Trash2 } from "lucide-vue-next";
+import { useQueryClient } from "@tanstack/vue-query";
 import { watchDebounced } from "@vueuse/core";
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
@@ -23,9 +24,7 @@ import {
   applyEditedLabelMacrosToItem,
   buildFoodEntryPayload,
   buildLabelLogItemsFromEstimate,
-  buildLogItemFromSavedFood,
   buildLogItemsFromEstimate,
-  buildLogItemsFromSavedMeal,
   buildMealIngredientsFromLogItems,
   MAX_LOG_ITEM_GRAMS,
   macrosFromLogItem,
@@ -46,8 +45,6 @@ import { currentUserId } from "@/lib/supabase";
 import type {
   AIItemInput,
   MacroEstimate,
-  MacroTotals,
-  SavedFood,
   SavedFoodDraft
 } from "@/types/domain";
 
@@ -57,7 +54,7 @@ interface DraftItem {
   gramsText: string;
 }
 
-type LogWay = "camera" | "gallery" | "text" | "library";
+type LogWay = "camera" | "gallery" | "text";
 
 interface PendingDuplicate extends PendingLibraryDuplicate {
   onResolved?: () => Promise<void>;
@@ -79,8 +76,6 @@ interface AddLogDraft {
   saveToLibrary: boolean;
   libraryName: string;
   hasUserEditedLibraryName: boolean;
-  librarySearchText: string;
-  selectedLibraryFoodId: string;
   usedPhotoSource: boolean;
   usedTextSource: boolean;
   usedLibrarySource: boolean;
@@ -94,12 +89,10 @@ interface AddLogDraft {
   manualProteinText: string;
   manualCarbsText: string;
   manualFatText: string;
-}
-
-interface MealTemplateCard {
-  meal: SavedFood;
-  ingredientsCount: number;
-  totals: MacroTotals;
+  selectedImageFile: File | null;
+  pendingEntryId: string | null;
+  pendingImagePath: string | null;
+  pendingLibrarySelectReturn?: boolean;
 }
 
 const route = useRoute();
@@ -108,9 +101,7 @@ const queryClient = useQueryClient();
 
 const mode = computed<"log" | "library">(() => (route.query.mode === "library" ? "library" : "log"));
 const draftKey = computed(() => `add-log:${mode.value}`);
-const MEAL_FAVORITES_KEY = "ezha:meal-template-favorites";
-const MEAL_RECENTS_KEY = "ezha:meal-template-recents";
-const MAX_RECENT_MEALS = 8;
+const LOG_MODE_DRAFT_KEY = "add-log:log";
 
 const selectedLogWays = ref<LogWay[]>([]);
 const selectedPhotoPicker = ref<"camera" | "gallery" | null>(null);
@@ -149,19 +140,12 @@ const saveToLibrary = ref(false);
 const libraryName = ref("");
 const hasUserEditedLibraryName = ref(false);
 const pendingDuplicate = ref<PendingDuplicate | null>(null);
-const librarySearchText = ref("");
 const usedPhotoSource = ref(false);
 const usedTextSource = ref(false);
 const usedLibrarySource = ref(false);
 const usedPhotoMode = ref<"food_photo" | "label_photo" | null>(null);
 const latestLabelItemId = ref<string | null>(null);
 
-const selectedLibraryFoodId = ref("");
-const favoriteMealIds = ref<string[]>([]);
-const recentMealIds = ref<string[]>([]);
-const mealTemplateCards = ref<MealTemplateCard[]>([]);
-const isLoadingMealTemplates = ref(false);
-const mealTemplateError = ref<string | null>(null);
 const gramsValidationMessage = ref<string | null>(null);
 
 const libraryEntryMode = ref<"photo" | "manual">("photo");
@@ -175,47 +159,7 @@ const manualFatText = ref("");
 
 const isLogWaySelected = (way: LogWay): boolean => selectedLogWays.value.includes(way);
 const isTextWaySelected = computed(() => isLogWaySelected("text"));
-const isLibraryWaySelected = computed(() => isLogWaySelected("library"));
 const isPhotoWaySelected = computed(() => isLogWaySelected("camera") || isLogWaySelected("gallery"));
-
-const savedFoodsQuery = useQuery({
-  queryKey: queryKeys.library,
-  queryFn: async () => savedFoodRepository.fetchFoods()
-});
-
-const allSavedFoods = computed(() => savedFoodsQuery.data.value ?? []);
-const allSavedMeals = computed(() => allSavedFoods.value.filter((food) => food.is_meal));
-const mealTemplateById = computed(() => new Map(mealTemplateCards.value.map((card) => [card.meal.id, card])));
-const selectedMealTemplate = computed(() => mealTemplateById.value.get(selectedLibraryFoodId.value) ?? null);
-
-const filteredMealTemplates = computed(() => {
-  const search = librarySearchText.value.trim().toLowerCase();
-  if (!search) return mealTemplateCards.value;
-  return mealTemplateCards.value.filter((card) => card.meal.name.toLowerCase().includes(search));
-});
-
-const filteredLibraryFoods = computed(() => {
-  const search = librarySearchText.value.trim().toLowerCase();
-  const foods = allSavedFoods.value.filter((food) => !food.is_meal);
-  if (!search) return foods;
-  return foods.filter((food) => food.name.toLowerCase().includes(search));
-});
-
-const favoriteMealTemplates = computed(() =>
-  filteredMealTemplates.value.filter((card) => favoriteMealIds.value.includes(card.meal.id))
-);
-
-const recentMealTemplates = computed(() =>
-  recentMealIds.value
-    .map((id) => filteredMealTemplates.value.find((card) => card.meal.id === id) ?? null)
-    .filter((card): card is MealTemplateCard => !!card && !favoriteMealIds.value.includes(card.meal.id))
-);
-
-const otherMealTemplates = computed(() =>
-  filteredMealTemplates.value.filter(
-    (card) => !favoriteMealIds.value.includes(card.meal.id) && !recentMealIds.value.includes(card.meal.id)
-  )
-);
 
 const manualPerServingPreview = computed(() => {
   const calories = parseNumberInput(manualCaloriesText.value);
@@ -299,22 +243,6 @@ const onLibraryNameInput = (nextName: string): void => {
   libraryName.value = nextName;
 };
 
-const readIdArrayFromStorage = (key: string): string[] => {
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((value): value is string => typeof value === "string");
-  } catch {
-    return [];
-  }
-};
-
-const writeIdArrayToStorage = (key: string, ids: string[]): void => {
-  window.localStorage.setItem(key, JSON.stringify(ids));
-};
-
 const defaultGramsTextForItem = (item: LogMealItem): string => {
   const fallback = item.baseGrams > 0 ? item.baseGrams : 100;
   return formatMacro(fallback, 1);
@@ -356,15 +284,6 @@ const fallbackGramsTextForItem = (item: LogMealItem): string => {
   return defaultGramsTextForItem(item);
 };
 
-const loadMealPickerPreferences = (): void => {
-  favoriteMealIds.value = readIdArrayFromStorage(MEAL_FAVORITES_KEY);
-  recentMealIds.value = readIdArrayFromStorage(MEAL_RECENTS_KEY);
-};
-
-const pushRecentMealId = (mealId: string): void => {
-  recentMealIds.value = [mealId, ...recentMealIds.value.filter((id) => id !== mealId)].slice(0, MAX_RECENT_MEALS);
-};
-
 const normalizeLogItemGramsText = (item: LogMealItem): void => {
   const normalized = normalizeLogItemGrams(item.gramsText);
   if (normalized == null) {
@@ -393,45 +312,6 @@ const adjustLogItemGrams = (item: LogMealItem, delta: number): void => {
 const normalizeAllLogItemGrams = (): void => {
   for (const item of logItems.value) {
     normalizeLogItemGramsText(item);
-  }
-};
-
-const loadMealTemplateCards = async (): Promise<void> => {
-  const meals = allSavedMeals.value;
-  if (meals.length === 0) {
-    mealTemplateCards.value = [];
-    return;
-  }
-
-  isLoadingMealTemplates.value = true;
-  mealTemplateError.value = null;
-  try {
-    const groupedIngredients = await savedFoodRepository.fetchMealIngredientsByMealIds(meals.map((meal) => meal.id));
-    mealTemplateCards.value = meals.map((meal) => {
-      const ingredients = groupedIngredients.get(meal.id) ?? [];
-      const totals = ingredients.reduce<MacroTotals>(
-        (acc, ingredient) => ({
-          calories: acc.calories + ingredient.calories,
-          protein: acc.protein + ingredient.protein,
-          carbs: acc.carbs + ingredient.carbs,
-          fat: acc.fat + ingredient.fat
-        }),
-        { calories: 0, protein: 0, carbs: 0, fat: 0 }
-      );
-      return {
-        meal,
-        ingredientsCount: ingredients.length,
-        totals
-      } satisfies MealTemplateCard;
-    });
-    if (selectedLibraryFoodId.value && !mealTemplateCards.value.some((card) => card.meal.id === selectedLibraryFoodId.value)) {
-      selectedLibraryFoodId.value = "";
-    }
-  } catch (error) {
-    mealTemplateCards.value = [];
-    mealTemplateError.value = error instanceof Error ? error.message : "Unable to load meal templates.";
-  } finally {
-    isLoadingMealTemplates.value = false;
   }
 };
 
@@ -560,7 +440,6 @@ const removeLogItem = (id: string): void => {
 };
 
 const clearMealDraft = (): void => {
-  selectedLibraryFoodId.value = "";
   logItems.value = [];
   lastValidGramsByItemId.value = {};
   lastValidLibraryFoodGramsByFoodId.value = {};
@@ -588,52 +467,14 @@ const uploadIfNeeded = async (): Promise<string | null> => {
   return path;
 };
 
-const toggleFavoriteMeal = (mealId: string): void => {
-  favoriteMealIds.value = favoriteMealIds.value.includes(mealId)
-    ? favoriteMealIds.value.filter((id) => id !== mealId)
-    : [...favoriteMealIds.value, mealId];
-};
-
-const selectMealTemplate = async (mealId: string): Promise<void> => {
-  if (!mealId) return;
-  selectedLibraryFoodId.value = mealId;
-  errorMessage.value = null;
-  saveMessage.value = null;
-  gramsValidationMessage.value = null;
-
-  try {
-    const ingredients = await savedFoodRepository.fetchMealIngredients(mealId);
-    const mapped = buildLogItemsFromSavedMeal(ingredients);
-    logItems.value = [...logItems.value, ...mapped];
-    usedLibrarySource.value = true;
-    latestLabelItemId.value = null;
-    pushRecentMealId(mealId);
-    if (mapped.some((item) => item.isNutritionMissing)) {
-      errorMessage.value = "[PLACEHOLDER] Some items are missing nutrition fields and are blocked from save.";
-    }
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "Unable to load meal template.";
-  }
-};
-
-const selectLibraryFood = (foodId: string): void => {
-  const food = allSavedFoods.value.find((item) => item.id === foodId && !item.is_meal);
-  if (!food) {
-    errorMessage.value = "Unable to load selected library food.";
-    return;
-  }
-
-  selectedLibraryFoodId.value = "";
-  errorMessage.value = null;
-  saveMessage.value = null;
-  gramsValidationMessage.value = null;
-  const rememberedGramsText = lastValidLibraryFoodGramsByFoodId.value[food.id];
-  const rememberedGrams = rememberedGramsText != null ? normalizeLogItemGrams(rememberedGramsText) : null;
-  const nextItem = buildLogItemFromSavedFood(food, rememberedGrams ?? 100);
-  logItems.value = [...logItems.value, nextItem];
-  rememberValidGramsForItem(nextItem);
-  usedLibrarySource.value = true;
-  latestLabelItemId.value = null;
+const openLibrarySelector = async (): Promise<void> => {
+  if (mode.value !== "log") return;
+  const draft = buildDraftSnapshot();
+  await saveDraft(LOG_MODE_DRAFT_KEY, {
+    ...draft,
+    pendingLibrarySelectReturn: true
+  } satisfies AddLogDraft);
+  await router.push({ name: "log-meal-library-select" });
 };
 
 const analyze = async (): Promise<void> => {
@@ -957,6 +798,14 @@ const applyLabelMacroEdits = (): void => {
 };
 
 const resetAddLogState = (): void => {
+  if (imagePreviewUrl.value) {
+    URL.revokeObjectURL(imagePreviewUrl.value);
+  }
+  selectedImageFile.value = null;
+  imagePreviewUrl.value = null;
+  pendingEntryId.value = null;
+  pendingImagePath.value = null;
+
   selectedLogWays.value = [];
   selectedPhotoPicker.value = null;
   entryMode.value = "description";
@@ -974,8 +823,6 @@ const resetAddLogState = (): void => {
   saveToLibrary.value = false;
   libraryName.value = "";
   hasUserEditedLibraryName.value = false;
-  librarySearchText.value = "";
-  selectedLibraryFoodId.value = "";
   usedPhotoSource.value = false;
   usedTextSource.value = false;
   usedLibrarySource.value = false;
@@ -993,18 +840,14 @@ const resetAddLogState = (): void => {
   estimate.value = null;
 };
 
-const hydrateFromDraft = async (): Promise<void> => {
-  if (mode.value === "log") {
-    resetAddLogState();
-    await clearDraft(draftKey.value);
-    return;
+const applyDraftSnapshot = (draft: AddLogDraft): void => {
+  if (imagePreviewUrl.value) {
+    URL.revokeObjectURL(imagePreviewUrl.value);
   }
-
-  const draft = await loadDraft<AddLogDraft>(draftKey.value);
-  if (!draft) {
-    resetAddLogState();
-    return;
-  }
+  selectedImageFile.value = draft.selectedImageFile ?? null;
+  pendingEntryId.value = draft.pendingEntryId ?? null;
+  pendingImagePath.value = draft.pendingImagePath ?? null;
+  imagePreviewUrl.value = selectedImageFile.value ? URL.createObjectURL(selectedImageFile.value) : null;
 
   selectedLogWays.value = draft.selectedLogWays ?? [];
   selectedPhotoPicker.value = draft.selectedPhotoPicker ?? null;
@@ -1022,8 +865,6 @@ const hydrateFromDraft = async (): Promise<void> => {
   saveToLibrary.value = draft.saveToLibrary;
   libraryName.value = draft.libraryName;
   hasUserEditedLibraryName.value = draft.hasUserEditedLibraryName ?? false;
-  librarySearchText.value = draft.librarySearchText ?? "";
-  selectedLibraryFoodId.value = draft.selectedLibraryFoodId;
   usedPhotoSource.value = draft.usedPhotoSource ?? false;
   usedTextSource.value = draft.usedTextSource ?? false;
   usedLibrarySource.value = draft.usedLibrarySource ?? false;
@@ -1039,45 +880,69 @@ const hydrateFromDraft = async (): Promise<void> => {
   manualFatText.value = draft.manualFatText;
 };
 
+const buildDraftSnapshot = (): AddLogDraft => ({
+  selectedLogWays: selectedLogWays.value,
+  selectedPhotoPicker: selectedPhotoPicker.value,
+  entryMode: entryMode.value,
+  descriptionText: descriptionText.value,
+  items: items.value,
+  logItems: logItems.value,
+  isLabelPhoto: isLabelPhoto.value,
+  labelGramsText: labelGramsText.value,
+  caloriesText: caloriesText.value,
+  proteinText: proteinText.value,
+  carbsText: carbsText.value,
+  fatText: fatText.value,
+  saveToLibrary: saveToLibrary.value,
+  libraryName: libraryName.value,
+  hasUserEditedLibraryName: hasUserEditedLibraryName.value,
+  usedPhotoSource: usedPhotoSource.value,
+  usedTextSource: usedTextSource.value,
+  usedLibrarySource: usedLibrarySource.value,
+  usedPhotoMode: usedPhotoMode.value,
+  latestLabelItemId: latestLabelItemId.value,
+  libraryEntryMode: libraryEntryMode.value,
+  manualUnitType: manualUnitType.value,
+  manualServingSizeText: manualServingSizeText.value,
+  manualServingUnit: manualServingUnit.value,
+  manualCaloriesText: manualCaloriesText.value,
+  manualProteinText: manualProteinText.value,
+  manualCarbsText: manualCarbsText.value,
+  manualFatText: manualFatText.value,
+  selectedImageFile: selectedImageFile.value,
+  pendingEntryId: pendingEntryId.value,
+  pendingImagePath: pendingImagePath.value
+});
+
+const hydrateFromDraft = async (): Promise<void> => {
+  if (mode.value === "log") {
+    const logDraft = await loadDraft<AddLogDraft>(LOG_MODE_DRAFT_KEY);
+    if (!logDraft?.pendingLibrarySelectReturn) {
+      resetAddLogState();
+      await clearDraft(LOG_MODE_DRAFT_KEY);
+      return;
+    }
+
+    applyDraftSnapshot(logDraft);
+    await clearDraft(LOG_MODE_DRAFT_KEY);
+    return;
+  }
+
+  const draft = await loadDraft<AddLogDraft>(draftKey.value);
+  if (!draft) {
+    resetAddLogState();
+    return;
+  }
+
+  applyDraftSnapshot(draft);
+};
+
 const persistDraft = async (): Promise<void> => {
   if (mode.value === "log") {
     return;
   }
 
-  const draft: AddLogDraft = {
-    selectedLogWays: selectedLogWays.value,
-    selectedPhotoPicker: selectedPhotoPicker.value,
-    entryMode: entryMode.value,
-    descriptionText: descriptionText.value,
-    items: items.value,
-    logItems: logItems.value,
-    isLabelPhoto: isLabelPhoto.value,
-    labelGramsText: labelGramsText.value,
-    caloriesText: caloriesText.value,
-    proteinText: proteinText.value,
-    carbsText: carbsText.value,
-    fatText: fatText.value,
-    saveToLibrary: saveToLibrary.value,
-    libraryName: libraryName.value,
-    hasUserEditedLibraryName: hasUserEditedLibraryName.value,
-    librarySearchText: librarySearchText.value,
-    selectedLibraryFoodId: selectedLibraryFoodId.value,
-    usedPhotoSource: usedPhotoSource.value,
-    usedTextSource: usedTextSource.value,
-    usedLibrarySource: usedLibrarySource.value,
-    usedPhotoMode: usedPhotoMode.value,
-    latestLabelItemId: latestLabelItemId.value,
-    libraryEntryMode: libraryEntryMode.value,
-    manualUnitType: manualUnitType.value,
-    manualServingSizeText: manualServingSizeText.value,
-    manualServingUnit: manualServingUnit.value,
-    manualCaloriesText: manualCaloriesText.value,
-    manualProteinText: manualProteinText.value,
-    manualCarbsText: manualCarbsText.value,
-    manualFatText: manualFatText.value
-  };
-
-  await saveDraft(draftKey.value, draft);
+  await saveDraft(draftKey.value, buildDraftSnapshot());
 };
 
 watch(
@@ -1105,8 +970,6 @@ watchDebounced(
     saveToLibrary,
     libraryName,
     hasUserEditedLibraryName,
-    librarySearchText,
-    selectedLibraryFoodId,
     usedPhotoSource,
     usedTextSource,
     usedLibrarySource,
@@ -1180,35 +1043,6 @@ watch(
   { immediate: true, deep: true }
 );
 
-watch(
-  allSavedMeals,
-  () => {
-    void loadMealTemplateCards();
-  },
-  { immediate: true, deep: true }
-);
-
-watch(
-  favoriteMealIds,
-  (ids) => {
-    writeIdArrayToStorage(MEAL_FAVORITES_KEY, ids);
-  },
-  { deep: true }
-);
-
-watch(
-  recentMealIds,
-  (ids) => {
-    writeIdArrayToStorage(MEAL_RECENTS_KEY, ids);
-  },
-  { deep: true }
-);
-
-onMounted(() => {
-  loadMealPickerPreferences();
-  void savedFoodsQuery.refetch();
-});
-
 onUnmounted(() => {
   if (imagePreviewUrl.value) {
     URL.revokeObjectURL(imagePreviewUrl.value);
@@ -1257,158 +1091,12 @@ onUnmounted(() => {
           </Button>
           <Button
             size="sm"
-            :variant="isLogWaySelected('library') ? 'default' : 'outline'"
-            @click="toggleLogWay('library')"
+            variant="secondary"
+            @click="openLibrarySelector"
           >
-            From library
+            Add from Library
           </Button>
         </div>
-      </div>
-    </Card>
-
-    <Card v-if="mode === 'log' && isLibraryWaySelected" class="glass space-y-4 p-3 sm:p-5">
-      <div class="space-y-2">
-        <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Search library</label>
-        <Input v-model="librarySearchText" placeholder="Search meals or foods..." />
-      </div>
-
-      <div v-if="isLoadingMealTemplates" class="rounded-xl border border-dashed border-border/80 p-5 text-center text-sm text-muted-foreground">
-        Loading meal templates...
-      </div>
-
-      <p v-else-if="mealTemplateError" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-        {{ mealTemplateError }}
-      </p>
-
-      <div
-        v-else-if="filteredMealTemplates.length === 0 && filteredLibraryFoods.length === 0"
-        class="rounded-xl border border-dashed border-border/80 p-5 text-center text-sm text-muted-foreground"
-      >
-        No saved library items found.
-      </div>
-
-      <div v-else class="space-y-4">
-        <section v-if="favoriteMealTemplates.length" class="space-y-2">
-          <p class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Favorites</p>
-          <article
-            v-for="template in favoriteMealTemplates"
-            :key="template.meal.id"
-            class="space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3"
-          >
-            <div class="flex items-start justify-between gap-2">
-              <div>
-                <h4 class="text-sm font-semibold">{{ template.meal.name }}</h4>
-                <p class="text-xs text-muted-foreground">
-                  {{ template.ingredientsCount }} items ·
-                  {{ formatMacro(template.totals.calories, 1) }} kcal ·
-                  P{{ formatMacro(template.totals.protein, 1) }} ·
-                  C{{ formatMacro(template.totals.carbs, 1) }} ·
-                  F{{ formatMacro(template.totals.fat, 1) }}
-                </p>
-              </div>
-              <div class="flex items-center gap-2">
-                <Button variant="ghost" size="sm" @click="toggleFavoriteMeal(template.meal.id)">★</Button>
-                <Button
-                  size="sm"
-                  :variant="selectedLibraryFoodId === template.meal.id ? 'secondary' : 'default'"
-                  @click="selectMealTemplate(template.meal.id)"
-                >
-                  Add meal
-                </Button>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section v-if="recentMealTemplates.length" class="space-y-2">
-          <p class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Recent</p>
-          <article
-            v-for="template in recentMealTemplates"
-            :key="template.meal.id"
-            class="space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3"
-          >
-            <div class="flex items-start justify-between gap-2">
-              <div>
-                <h4 class="text-sm font-semibold">{{ template.meal.name }}</h4>
-                <p class="text-xs text-muted-foreground">
-                  {{ template.ingredientsCount }} items ·
-                  {{ formatMacro(template.totals.calories, 1) }} kcal ·
-                  P{{ formatMacro(template.totals.protein, 1) }} ·
-                  C{{ formatMacro(template.totals.carbs, 1) }} ·
-                  F{{ formatMacro(template.totals.fat, 1) }}
-                </p>
-              </div>
-              <div class="flex items-center gap-2">
-                <Button variant="ghost" size="sm" @click="toggleFavoriteMeal(template.meal.id)">
-                  {{ favoriteMealIds.includes(template.meal.id) ? "★" : "☆" }}
-                </Button>
-                <Button
-                  size="sm"
-                  :variant="selectedLibraryFoodId === template.meal.id ? 'secondary' : 'default'"
-                  @click="selectMealTemplate(template.meal.id)"
-                >
-                  Add meal
-                </Button>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section v-if="otherMealTemplates.length" class="space-y-2">
-          <p class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">All meals</p>
-          <article
-            v-for="template in otherMealTemplates"
-            :key="template.meal.id"
-            class="space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3"
-          >
-            <div class="flex items-start justify-between gap-2">
-              <div>
-                <h4 class="text-sm font-semibold">{{ template.meal.name }}</h4>
-                <p class="text-xs text-muted-foreground">
-                  {{ template.ingredientsCount }} items ·
-                  {{ formatMacro(template.totals.calories, 1) }} kcal ·
-                  P{{ formatMacro(template.totals.protein, 1) }} ·
-                  C{{ formatMacro(template.totals.carbs, 1) }} ·
-                  F{{ formatMacro(template.totals.fat, 1) }}
-                </p>
-              </div>
-              <div class="flex items-center gap-2">
-                <Button variant="ghost" size="sm" @click="toggleFavoriteMeal(template.meal.id)">
-                  {{ favoriteMealIds.includes(template.meal.id) ? "★" : "☆" }}
-                </Button>
-                <Button
-                  size="sm"
-                  :variant="selectedLibraryFoodId === template.meal.id ? 'secondary' : 'default'"
-                  @click="selectMealTemplate(template.meal.id)"
-                >
-                  Add meal
-                </Button>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section v-if="filteredLibraryFoods.length" class="space-y-2">
-          <p class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Foods</p>
-          <article
-            v-for="food in filteredLibraryFoods"
-            :key="food.id"
-            class="space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3"
-          >
-            <div class="flex items-start justify-between gap-2">
-              <div>
-                <h4 class="text-sm font-semibold">{{ food.name }}</h4>
-                <p class="text-xs text-muted-foreground">
-                  {{ formatMacro(food.calories_per_100g, 1) }} kcal/100g ·
-                  P{{ formatMacro(food.protein_per_100g, 1) }} ·
-                  C{{ formatMacro(food.carbs_per_100g, 1) }} ·
-                  F{{ formatMacro(food.fat_per_100g, 1) }}
-                </p>
-              </div>
-              <Button size="sm" @click="selectLibraryFood(food.id)">Add food</Button>
-            </div>
-          </article>
-        </section>
       </div>
     </Card>
 
@@ -1636,7 +1324,15 @@ onUnmounted(() => {
         >
           <div class="flex items-start justify-between gap-2">
             <h4 class="text-sm font-semibold">{{ item.name }}</h4>
-            <Button variant="ghost" size="sm" @click="removeLogItem(item.id)">Remove</Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="h-8 w-8 rounded-full p-0 text-destructive"
+              :aria-label="`Remove ${item.name}`"
+              @click="removeLogItem(item.id)"
+            >
+              <Trash2 class="size-4" />
+            </Button>
           </div>
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div class="space-y-1">
