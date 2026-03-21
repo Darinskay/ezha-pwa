@@ -23,6 +23,7 @@ const maxPrepTimeMinutes = ref(20);
 const ingredientNotes = ref("");
 const suggestions = ref<MealSuggestion[]>([]);
 const suggestionError = ref<string | null>(null);
+const contextRefreshedAt = ref<Date | null>(null);
 
 interface SuggestionsContext {
   activeDate: string;
@@ -67,10 +68,22 @@ const loadContext = async (): Promise<SuggestionsContext> => {
 
 const contextQuery = useQuery({
   queryKey: queryKeys.suggestionsContext,
-  queryFn: loadContext
+  queryFn: async () => {
+    const result = await loadContext();
+    contextRefreshedAt.value = new Date();
+    return result;
+  }
 });
 const contextData = computed(() => contextQuery.data.value);
 const contextError = computed(() => (contextQuery.error.value as Error | null) ?? null);
+
+const contextAgeLabel = computed(() => {
+  if (!contextRefreshedAt.value) return null;
+  const diffMs = Date.now() - contextRefreshedAt.value.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "just now";
+  return `${diffMin} min ago`;
+});
 
 const exceedWarning = (suggestion: {
   calories: number;
@@ -166,6 +179,7 @@ watch(
 
 const refreshContext = async (): Promise<void> => {
   await contextQuery.refetch();
+  contextRefreshedAt.value = new Date();
   await queryClient.invalidateQueries({ queryKey: queryKeys.today });
 };
 </script>
@@ -210,8 +224,21 @@ const refreshContext = async (): Promise<void> => {
 
       <Separator />
 
-      <Button variant="ghost" size="sm" @click="refreshContext">Refresh context</Button>
+      <div class="flex items-center gap-3">
+        <Button variant="ghost" size="sm" @click="refreshContext">Refresh remaining macros</Button>
+        <span v-if="contextAgeLabel" class="text-xs text-muted-foreground">as of {{ contextAgeLabel }}</span>
+      </div>
     </Card>
+
+    <div v-if="!suggestions.length && !fetchSuggestionsMutation.isPending.value" class="rounded-2xl border border-dashed border-border/80 p-4 space-y-2">
+      <p class="text-sm font-medium">How to get suggestions</p>
+      <ul class="space-y-1 text-xs text-muted-foreground">
+        <li>🍽 <strong>Meal type</strong> — Choose a full meal or a lighter snack</li>
+        <li>⏱ <strong>Max prep time</strong> — How many minutes you can spare to cook</li>
+        <li>🥗 <strong>Ingredient notes</strong> — Any restrictions or preferences (optional)</li>
+      </ul>
+      <p class="text-xs text-muted-foreground">Tap <strong>Get suggestions</strong> and the AI will propose 3 options that fit your remaining macros.</p>
+    </div>
 
     <Card class="space-y-4 p-3 sm:p-5">
       <div class="grid gap-3 sm:grid-cols-2">
@@ -223,14 +250,18 @@ const refreshContext = async (): Promise<void> => {
           </SelectField>
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Max prep time (1-240)</label>
-          <Input v-model="maxPrepTimeMinutes" type="number" min="1" max="240" />
+          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Max prep time (minutes)</label>
+          <div class="relative flex items-center gap-2">
+            <Input v-model="maxPrepTimeMinutes" type="number" min="1" max="240" class="flex-1" />
+            <span class="text-xs text-muted-foreground">min</span>
+          </div>
         </div>
       </div>
 
       <div class="space-y-1">
         <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Ingredient notes</label>
-        <Textarea v-model="ingredientNotes" :rows="3" placeholder="Example: no peanuts, add berries" />
+        <Textarea v-model="ingredientNotes" :rows="3" placeholder="Restrictions or preferences, e.g. no peanuts, dairy-free" />
+        <p class="text-xs text-muted-foreground">List any dietary restrictions or preferred ingredients. Leave blank for no preference.</p>
       </div>
 
       <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -238,7 +269,7 @@ const refreshContext = async (): Promise<void> => {
           Get suggestions
         </Button>
         <Button variant="secondary" :disabled="!suggestions.length" @click="regenerateDifferent">
-          Another options
+          Other options
         </Button>
         <Button variant="secondary" :disabled="!suggestions.length" @click="regenerateIngredients">
           Regenerate by ingredients
@@ -270,6 +301,7 @@ const refreshContext = async (): Promise<void> => {
           P{{ suggestion.protein }}g · C{{ suggestion.carbs }}g · F{{ suggestion.fat }}g
         </p>
         <p v-if="suggestion.warning" class="text-xs font-medium text-destructive">{{ suggestion.warning }}</p>
+        <p v-if="suggestion.warning" class="text-xs text-muted-foreground">Consider halving the portion or choosing a lighter option.</p>
         <p v-if="suggestion.notes" class="text-xs text-muted-foreground">{{ suggestion.notes }}</p>
       </Card>
     </div>

@@ -36,6 +36,8 @@ const showTargetChooser = ref(false);
 const selectedTargetId = ref<string>("");
 const startNewDayError = ref<string | null>(null);
 const startNewDayWarning = ref<string | null>(null);
+const showDeleteToast = ref(false);
+let deleteToastTimer: ReturnType<typeof setTimeout> | null = null;
 
 const loadToday = async (): Promise<TodayData> => {
   const { profile, targets } = await ensureProfileAndTargets();
@@ -158,6 +160,9 @@ const deleteEntryMutation = useMutation({
       queryClient.invalidateQueries({ queryKey: queryKeys.history }),
       queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext })
     ]);
+    showDeleteToast.value = true;
+    if (deleteToastTimer) clearTimeout(deleteToastTimer);
+    deleteToastTimer = setTimeout(() => { showDeleteToast.value = false; }, 3000);
   }
 });
 
@@ -218,6 +223,24 @@ const consumedPercent = (target: number, eaten: number): number => {
   if (target <= 0) return 0;
   return Math.max(0, Math.round((eaten / target) * 100));
 };
+
+const macroStatusIcon = (target: number, eaten: number): string => {
+  if (target <= 0) return "";
+  const pct = (eaten / target) * 100;
+  if (pct > 100) return "✗";
+  if (pct >= 80) return "⚠";
+  return "✓";
+};
+
+const macroStatusClass = (target: number, eaten: number): string => {
+  if (target <= 0) return "";
+  const pct = (eaten / target) * 100;
+  if (pct > 100) return "text-destructive";
+  if (pct >= 80) return "text-amber-500";
+  return "text-green-500";
+};
+
+const canStartNewDay = computed(() => !!todayData.value && todayData.value.availableTargets.length > 0);
 </script>
 
 <template>
@@ -230,7 +253,12 @@ const consumedPercent = (target: number, eaten: number): number => {
     <Card class="glass space-y-4 p-3 sm:p-5">
       <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div class="stat-chip">
-          <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Calories Left</p>
+          <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground flex items-center gap-1">
+            Calories Left
+            <span :class="macroStatusClass(todayData?.targets.calories ?? 0, todayData?.totals.calories ?? 0)" class="text-[10px]">
+              {{ macroStatusIcon(todayData?.targets.calories ?? 0, todayData?.totals.calories ?? 0) }}
+            </span>
+          </p>
           <p class="mt-1 text-base font-semibold sm:text-lg">
             {{ remainingAmount(todayData?.targets.calories ?? 0, todayData?.totals.calories ?? 0) }}
             <span class="ml-1 text-xs font-medium text-muted-foreground">
@@ -239,7 +267,12 @@ const consumedPercent = (target: number, eaten: number): number => {
           </p>
         </div>
         <div class="stat-chip">
-          <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Protein Left</p>
+          <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground flex items-center gap-1">
+            Protein Left
+            <span :class="macroStatusClass(todayData?.targets.protein ?? 0, todayData?.totals.protein ?? 0)" class="text-[10px]">
+              {{ macroStatusIcon(todayData?.targets.protein ?? 0, todayData?.totals.protein ?? 0) }}
+            </span>
+          </p>
           <p class="mt-1 text-base font-semibold sm:text-lg">
             {{ remainingAmount(todayData?.targets.protein ?? 0, todayData?.totals.protein ?? 0) }}g
             <span class="ml-1 text-xs font-medium text-muted-foreground">
@@ -248,7 +281,12 @@ const consumedPercent = (target: number, eaten: number): number => {
           </p>
         </div>
         <div class="stat-chip">
-          <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Carbs Left</p>
+          <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground flex items-center gap-1">
+            Carbs Left
+            <span :class="macroStatusClass(todayData?.targets.carbs ?? 0, todayData?.totals.carbs ?? 0)" class="text-[10px]">
+              {{ macroStatusIcon(todayData?.targets.carbs ?? 0, todayData?.totals.carbs ?? 0) }}
+            </span>
+          </p>
           <p class="mt-1 text-base font-semibold sm:text-lg">
             {{ remainingAmount(todayData?.targets.carbs ?? 0, todayData?.totals.carbs ?? 0) }}g
             <span class="ml-1 text-xs font-medium text-muted-foreground">
@@ -257,7 +295,12 @@ const consumedPercent = (target: number, eaten: number): number => {
           </p>
         </div>
         <div class="stat-chip">
-          <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground">Fat Left</p>
+          <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground flex items-center gap-1">
+            Fat Left
+            <span :class="macroStatusClass(todayData?.targets.fat ?? 0, todayData?.totals.fat ?? 0)" class="text-[10px]">
+              {{ macroStatusIcon(todayData?.targets.fat ?? 0, todayData?.totals.fat ?? 0) }}
+            </span>
+          </p>
           <p class="mt-1 text-base font-semibold sm:text-lg">
             {{ remainingAmount(todayData?.targets.fat ?? 0, todayData?.totals.fat ?? 0) }}g
             <span class="ml-1 text-xs font-medium text-muted-foreground">
@@ -293,13 +336,21 @@ const consumedPercent = (target: number, eaten: number): number => {
 
     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
       <Button :loading="todayQuery.isFetching.value" @click="openAddLog">Log Meal</Button>
-      <Button variant="outline" :loading="startNewDayMutation.isPending.value" @click="startNewDay">
-        Start New Day
-      </Button>
+      <div class="flex flex-col gap-1">
+        <Button variant="outline" :loading="startNewDayMutation.isPending.value" :disabled="!canStartNewDay" @click="startNewDay">
+          Start New Day
+        </Button>
+        <p v-if="!canStartNewDay && !todayQuery.isPending.value" class="text-center text-xs text-muted-foreground">
+          Create a daily target in Settings first.
+        </p>
+      </div>
     </div>
 
     <Card v-if="showTargetChooser && todayData" class="space-y-3 p-3 sm:p-5">
-      <h3 class="text-sm font-semibold">Choose target for next day</h3>
+      <div>
+        <h3 class="text-sm font-semibold">Choose target for next day</h3>
+        <p class="text-xs text-muted-foreground">Your current entries will be saved to History.</p>
+      </div>
       <SelectField v-model="selectedTargetId">
         <option v-for="target in todayData.availableTargets" :key="target.id" :value="target.id">
           {{ target.name }} · {{ Math.round(target.calories_target) }} kcal
@@ -327,7 +378,8 @@ const consumedPercent = (target: number, eaten: number): number => {
         v-else-if="!todayData?.entriesWithItems.length"
         class="rounded-xl border border-dashed border-border/80 p-6 text-center text-sm text-muted-foreground"
       >
-        No items yet.
+        <p>Nothing logged yet.</p>
+        <p class="mt-1">Tap <strong>Log Meal</strong> above to add your first meal.</p>
       </div>
       <div v-else class="space-y-3">
         <div v-for="entry in todayData?.entriesWithItems ?? []" :key="entry.entry.id" class="space-y-2">
@@ -344,5 +396,25 @@ const consumedPercent = (target: number, eaten: number): number => {
         </div>
       </div>
     </Card>
+    <Transition name="toast">
+      <div
+        v-if="showDeleteToast"
+        class="fixed bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background shadow-lg"
+      >
+        Entry deleted
+      </div>
+    </Transition>
   </section>
 </template>
+
+<style scoped>
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
+}
+</style>
