@@ -19,6 +19,17 @@ export const savedFoodRepository = {
     return parseListWithSchema(savedFoodSchema, data ?? [], "saved_foods");
   },
 
+  async fetchMeals(): Promise<SavedFood[]> {
+    const { data, error } = await supabaseClient
+      .from("saved_foods")
+      .select("*")
+      .eq("is_meal", true)
+      .order("name", { ascending: true });
+
+    ensureNoError(error);
+    return parseListWithSchema(savedFoodSchema, data ?? [], "saved_foods");
+  },
+
   async fetchNonMealFoods(): Promise<SavedFood[]> {
     const { data, error } = await supabaseClient
       .from("saved_foods")
