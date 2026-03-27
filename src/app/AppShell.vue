@@ -17,17 +17,6 @@ const tabs = [
 
 const hideTabs = computed(() => route.name === "add-log" || route.name === "log-meal-library-select");
 
-const featureClass = computed(() => {
-  const name = String(route.name ?? "");
-  if (name === "today") return "feature-today";
-  if (name === "suggestions") return "feature-suggestions";
-  if (name === "library") return "feature-library";
-  if (name === "history") return "feature-history";
-  if (name === "settings") return "feature-settings";
-  if (name === "add-log" || name === "log-meal-library-select") return "feature-add-log";
-  return "feature-today";
-});
-
 const navigate = async (name: (typeof tabs)[number]["name"]): Promise<void> => {
   if (route.name === name) return;
   await router.push({ name });
@@ -35,7 +24,7 @@ const navigate = async (name: (typeof tabs)[number]["name"]): Promise<void> => {
 </script>
 
 <template>
-  <div :class="cn('app-root feature relative min-h-screen text-foreground', featureClass)">
+  <div class="app-root feature feature-settings relative min-h-screen text-foreground">
     <main class="mx-auto flex min-h-screen w-full max-w-5xl flex-col">
       <RouterView />
     </main>

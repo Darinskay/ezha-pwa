@@ -52,7 +52,7 @@ const continueWithGoogle = async (): Promise<void> => {
           class="rounded-xl px-3 py-2 text-sm font-semibold transition-colors"
           :class="
             isCreatingAccount
-              ? 'bg-card text-foreground shadow-[0_8px_20px_rgb(15_23_42_/_0.12)]'
+              ? 'bg-card text-foreground shadow-[0_8px_20px_hsl(var(--glass-shadow)/0.12)]'
               : 'text-muted-foreground hover:text-foreground'
           "
           @click="isCreatingAccount = true"
@@ -63,7 +63,7 @@ const continueWithGoogle = async (): Promise<void> => {
           class="rounded-xl px-3 py-2 text-sm font-semibold transition-colors"
           :class="
             !isCreatingAccount
-              ? 'bg-card text-foreground shadow-[0_8px_20px_rgb(15_23_42_/_0.12)]'
+              ? 'bg-card text-foreground shadow-[0_8px_20px_hsl(var(--glass-shadow)/0.12)]'
               : 'text-muted-foreground hover:text-foreground'
           "
           @click="isCreatingAccount = false"

@@ -28,8 +28,27 @@ export default {
         sm: "calc(0.9rem - 4px)"
       },
       fontFamily: {
-        sans: ["'Manrope'", "ui-sans-serif", "system-ui", "sans-serif"],
-        mono: ["'JetBrains Mono'", "ui-monospace", "SFMono-Regular", "monospace"]
+        sans: [
+          "-apple-system",
+          "BlinkMacSystemFont",
+          '"SF Pro Text"',
+          '"SF Pro Display"',
+          '"Helvetica Neue"',
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif"
+        ],
+        mono: [
+          '"SF Mono"',
+          "SFMono-Regular",
+          "ui-monospace",
+          "Menlo",
+          "Monaco",
+          "Consolas",
+          '"Liberation Mono"',
+          '"Courier New"',
+          "monospace"
+        ]
       },
       boxShadow: {
         card: "0 8px 30px rgb(0 0 0 / 0.06)"

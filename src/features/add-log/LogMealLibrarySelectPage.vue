@@ -52,9 +52,9 @@ const recentFoodIds = ref<string[]>([]);
 // --- Meals tab state ---
 const activeTab = ref<ActiveTab>("foods");
 const mealSearchText = ref("");
-const selectedMealId = ref<string | null>(null);
+const selectedMealIds = ref<string[]>([]);
 const mealIngredientsByMealId = ref<Record<string, EditableIngredient[]>>({});
-const loadingMealId = ref<string | null>(null);
+const loadingMealIds = ref<string[]>([]);
 const mealLoadError = ref<string | null>(null);
 
 // --- Queries ---
@@ -152,26 +152,27 @@ const filteredMeals = computed(() => {
   return search ? meals.filter((meal) => meal.name.toLowerCase().includes(search)) : meals;
 });
 
-const selectedMealIngredients = computed(() =>
-  selectedMealId.value ? (mealIngredientsByMealId.value[selectedMealId.value] ?? []) : []
-);
+const isMealSelected = (mealId: string): boolean => selectedMealIds.value.includes(mealId);
+
+const isMealLoading = (mealId: string): boolean => loadingMealIds.value.includes(mealId);
 
 const canSaveMeal = computed(() =>
-  selectedMealId.value !== null &&
-  selectedMealIngredients.value.some((i) => (parseNumberInput(i.gramsText) ?? 0) > 0)
+  selectedMealIds.value.some((mealId) =>
+    (mealIngredientsByMealId.value[mealId] ?? []).some((ingredient) => (parseNumberInput(ingredient.gramsText) ?? 0) > 0)
+  )
 );
 
-const selectMeal = async (mealId: string): Promise<void> => {
-  if (selectedMealId.value === mealId) {
-    selectedMealId.value = null;
+const toggleMealSelection = async (mealId: string): Promise<void> => {
+  if (isMealSelected(mealId)) {
+    selectedMealIds.value = selectedMealIds.value.filter((id) => id !== mealId);
     return;
   }
 
-  selectedMealId.value = mealId;
+  selectedMealIds.value = [...selectedMealIds.value, mealId];
 
   if (mealIngredientsByMealId.value[mealId]) return;
 
-  loadingMealId.value = mealId;
+  loadingMealIds.value = [...loadingMealIds.value, mealId];
   mealLoadError.value = null;
   try {
     const raw = await savedFoodRepository.fetchMealIngredients(mealId);
@@ -191,9 +192,9 @@ const selectMeal = async (mealId: string): Promise<void> => {
     };
   } catch (error) {
     mealLoadError.value = error instanceof Error ? error.message : "Unable to load ingredients.";
-    selectedMealId.value = null;
+    selectedMealIds.value = selectedMealIds.value.filter((id) => id !== mealId);
   } finally {
-    loadingMealId.value = null;
+    loadingMealIds.value = loadingMealIds.value.filter((id) => id !== mealId);
   }
 };
 
@@ -308,10 +309,10 @@ const confirmFoodSelection = async (): Promise<void> => {
 
 // --- Confirm: meals ---
 const confirmMealSelection = async (): Promise<void> => {
-  if (!selectedMealId.value) return;
+  if (selectedMealIds.value.length === 0) return;
 
-  const ingredients = mealIngredientsByMealId.value[selectedMealId.value] ?? [];
-  const logItems = ingredients
+  const logItems = selectedMealIds.value
+    .flatMap((mealId) => mealIngredientsByMealId.value[mealId] ?? [])
     .map(buildLogItemFromEditableIngredient)
     .filter((item): item is LogMealItem => item !== null);
 
@@ -481,36 +482,36 @@ void preselectFromDraft();
           v-for="meal in filteredMeals"
           :key="meal.id"
           class="rounded-2xl border bg-card/70 overflow-hidden"
-          :class="selectedMealId === meal.id ? 'border-[hsl(var(--feature-primary)/0.5)]' : 'border-border/70'"
+          :class="isMealSelected(meal.id) ? 'border-[hsl(var(--feature-primary)/0.5)]' : 'border-border/70'"
         >
           <!-- Meal header row -->
           <div
             class="flex cursor-pointer items-start justify-between gap-2 p-3"
             role="button"
             tabindex="0"
-            @click="selectMeal(meal.id)"
-            @keydown.enter.prevent="selectMeal(meal.id)"
-            @keydown.space.prevent="selectMeal(meal.id)"
+            @click="toggleMealSelection(meal.id)"
+            @keydown.enter.prevent="toggleMealSelection(meal.id)"
+            @keydown.space.prevent="toggleMealSelection(meal.id)"
           >
             <div class="flex items-start gap-3">
-              <!-- Selection indicator -->
-              <span
-                class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors"
-                :class="selectedMealId === meal.id ? 'border-[hsl(var(--feature-primary))] bg-[hsl(var(--feature-primary))]' : 'border-border'"
-              >
-                <span v-if="selectedMealId === meal.id" class="size-1.5 rounded-full bg-white" />
-              </span>
+              <input
+                class="mt-0.5 size-4 shrink-0 rounded border-border accent-primary"
+                type="checkbox"
+                :checked="isMealSelected(meal.id)"
+                @click.stop
+                @change="toggleMealSelection(meal.id)"
+              />
               <div>
                 <p class="text-sm font-semibold">{{ meal.name }}</p>
                 <p class="text-xs text-muted-foreground">Tap to expand and adjust ingredient grams</p>
               </div>
             </div>
-            <span class="mt-0.5 text-xs text-muted-foreground transition-transform" :class="selectedMealId === meal.id ? 'rotate-180' : ''">▾</span>
+            <span class="mt-0.5 text-xs text-muted-foreground transition-transform" :class="isMealSelected(meal.id) ? 'rotate-180' : ''">▾</span>
           </div>
 
           <!-- Ingredient list (expanded) -->
-          <template v-if="selectedMealId === meal.id">
-            <div v-if="loadingMealId === meal.id" class="border-t border-border/50 px-3 py-4 text-center text-sm text-muted-foreground">
+          <template v-if="isMealSelected(meal.id)">
+            <div v-if="isMealLoading(meal.id)" class="border-t border-border/50 px-3 py-4 text-center text-sm text-muted-foreground">
               Loading ingredients...
             </div>
 
@@ -567,7 +568,7 @@ void preselectFromDraft();
           Add Selected ({{ selectedCount }})
         </Button>
         <Button v-else :disabled="!canSaveMeal" @click="confirmMealSelection">
-          Add Meal
+          Add Selected ({{ selectedMealIds.length }})
         </Button>
       </div>
     </div>

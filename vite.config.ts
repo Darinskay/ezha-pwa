@@ -13,7 +13,7 @@ export default defineConfig({
         name: "EZHA",
         short_name: "EZHA",
         description: "Smarter meal logging with AI estimates you can edit.",
-        theme_color: "#cc3399",
+        theme_color: "#8b4de7",
         background_color: "#ffffff",
         display: "standalone",
         start_url: "/",
