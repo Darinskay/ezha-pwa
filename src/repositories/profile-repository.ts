@@ -4,12 +4,12 @@ import type { Profile } from "@/types/domain";
 import { parseWithSchema, profileSchema } from "@/types/schemas";
 
 export const profileRepository = {
-  async fetchProfile(): Promise<Profile | null> {
-    const userId = await getUserId();
+  async fetchProfile(userId?: string): Promise<Profile | null> {
+    const resolvedUserId = userId ?? await getUserId();
     const { data, error } = await supabaseClient
       .from("profiles")
       .select("*")
-      .eq("user_id", userId)
+      .eq("user_id", resolvedUserId)
       .maybeSingle();
 
     ensureNoError(error);
@@ -17,8 +17,8 @@ export const profileRepository = {
     return parseWithSchema(profileSchema, data, "profile");
   },
 
-  async ensureProfileRowExists(defaultTargets: Profile): Promise<void> {
-    const existing = await this.fetchProfile();
+  async ensureProfileRowExists(defaultTargets: Profile, userId?: string): Promise<void> {
+    const existing = await this.fetchProfile(userId ?? defaultTargets.user_id);
     if (existing) return;
 
     const { error } = await supabaseClient.from("profiles").insert(defaultTargets);

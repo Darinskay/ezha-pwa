@@ -6,7 +6,11 @@ import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import Input from "@/components/ui/Input.vue";
 import { loadDraft, saveDraft } from "@/db/offline-db";
-import { buildLogItemFromSavedFood, normalizeLogItemGrams, type LogMealItem } from "@/features/add-log/log-meal-service";
+import {
+  buildLogItemFromSavedFood,
+  normalizeLogItemGrams,
+  type LogMealItem,
+} from "@/features/add-log/log-meal-service";
 import { formatMacro } from "@/lib/macros";
 import { parseNumberInput } from "@/lib/number";
 import { queryKeys } from "@/query/keys";
@@ -60,12 +64,12 @@ const mealLoadError = ref<string | null>(null);
 // --- Queries ---
 const foodsQuery = useQuery({
   queryKey: [...queryKeys.library, "selector-foods"],
-  queryFn: async () => savedFoodRepository.fetchNonMealFoods()
+  queryFn: async () => savedFoodRepository.fetchNonMealFoods(),
 });
 
 const mealsQuery = useQuery({
   queryKey: [...queryKeys.library, "selector-meals"],
-  queryFn: async () => savedFoodRepository.fetchMeals()
+  queryFn: async () => savedFoodRepository.fetchMeals(),
 });
 
 // --- Foods tab helpers ---
@@ -85,7 +89,8 @@ const writeIdArrayToStorage = (key: string, ids: string[]): void => {
   window.localStorage.setItem(key, JSON.stringify(ids));
 };
 
-const isSelected = (foodId: string): boolean => selectedFoodIds.value.includes(foodId);
+const isSelected = (foodId: string): boolean =>
+  selectedFoodIds.value.includes(foodId);
 
 const ensureDefaultGrams = (foodId: string): void => {
   if (!gramsByFoodId.value[foodId]) {
@@ -130,10 +135,14 @@ const selectedCount = computed(() => selectedFoodIds.value.length);
 const filteredFoods = computed(() => {
   const foods = foodsQuery.data.value ?? [];
   const search = searchText.value.trim().toLowerCase();
-  const filteredBySearch = search ? foods.filter((food) => food.name.toLowerCase().includes(search)) : foods;
+  const filteredBySearch = search
+    ? foods.filter((food) => food.name.toLowerCase().includes(search))
+    : foods;
 
   if (activeFilter.value === "favorites") {
-    return filteredBySearch.filter((food) => favoriteFoodIds.value.includes(food.id));
+    return filteredBySearch.filter((food) =>
+      favoriteFoodIds.value.includes(food.id),
+    );
   }
 
   if (activeFilter.value === "recent") {
@@ -149,17 +158,23 @@ const filteredFoods = computed(() => {
 const filteredMeals = computed(() => {
   const meals = mealsQuery.data.value ?? [];
   const search = mealSearchText.value.trim().toLowerCase();
-  return search ? meals.filter((meal) => meal.name.toLowerCase().includes(search)) : meals;
+  return search
+    ? meals.filter((meal) => meal.name.toLowerCase().includes(search))
+    : meals;
 });
 
-const isMealSelected = (mealId: string): boolean => selectedMealIds.value.includes(mealId);
+const isMealSelected = (mealId: string): boolean =>
+  selectedMealIds.value.includes(mealId);
 
-const isMealLoading = (mealId: string): boolean => loadingMealIds.value.includes(mealId);
+const isMealLoading = (mealId: string): boolean =>
+  loadingMealIds.value.includes(mealId);
 
 const canSaveMeal = computed(() =>
   selectedMealIds.value.some((mealId) =>
-    (mealIngredientsByMealId.value[mealId] ?? []).some((ingredient) => (parseNumberInput(ingredient.gramsText) ?? 0) > 0)
-  )
+    (mealIngredientsByMealId.value[mealId] ?? []).some(
+      (ingredient) => (parseNumberInput(ingredient.gramsText) ?? 0) > 0,
+    ),
+  ),
 );
 
 const toggleMealSelection = async (mealId: string): Promise<void> => {
@@ -187,11 +202,12 @@ const toggleMealSelection = async (mealId: string): Promise<void> => {
         originalProtein: ingredient.protein,
         originalCarbs: ingredient.carbs,
         originalFat: ingredient.fat,
-        linkedFoodId: ingredient.linked_food_id ?? null
-      }))
+        linkedFoodId: ingredient.linked_food_id ?? null,
+      })),
     };
   } catch (error) {
-    mealLoadError.value = error instanceof Error ? error.message : "Unable to load ingredients.";
+    mealLoadError.value =
+      error instanceof Error ? error.message : "Unable to load ingredients.";
     selectedMealIds.value = selectedMealIds.value.filter((id) => id !== mealId);
   } finally {
     loadingMealIds.value = loadingMealIds.value.filter((id) => id !== mealId);
@@ -208,11 +224,13 @@ const ingredientScaledMacros = (ingredient: EditableIngredient) => {
     calories: ingredient.originalCalories * scale,
     protein: ingredient.originalProtein * scale,
     carbs: ingredient.originalCarbs * scale,
-    fat: ingredient.originalFat * scale
+    fat: ingredient.originalFat * scale,
   };
 };
 
-const buildLogItemFromEditableIngredient = (ingredient: EditableIngredient): LogMealItem | null => {
+const buildLogItemFromEditableIngredient = (
+  ingredient: EditableIngredient,
+): LogMealItem | null => {
   const grams = parseNumberInput(ingredient.gramsText) ?? 0;
   if (grams <= 0 || ingredient.originalGrams <= 0) return null;
 
@@ -231,7 +249,7 @@ const buildLogItemFromEditableIngredient = (ingredient: EditableIngredient): Log
     linkedFoodId: ingredient.linkedFoodId,
     aiConfidence: null,
     aiNotes: "Added from saved meal",
-    isNutritionMissing: false
+    isNutritionMissing: false,
   };
 };
 
@@ -240,7 +258,8 @@ const preselectFromDraft = async (): Promise<void> => {
   const draft = await loadDraft<AddLogDraftSnapshot>(LOG_MODE_DRAFT_KEY);
   const logItems = Array.isArray(draft?.logItems) ? draft.logItems : [];
   const libraryFoodItems = logItems.filter(
-    (item): item is LogMealItem => item.origin === "library_food" && !!item.linkedFoodId
+    (item): item is LogMealItem =>
+      item.origin === "library_food" && !!item.linkedFoodId,
   );
 
   if (libraryFoodItems.length === 0) {
@@ -264,7 +283,10 @@ const preselectFromDraft = async (): Promise<void> => {
 };
 
 const pushRecentFoodIds = (foodIds: string[]): void => {
-  recentFoodIds.value = [...foodIds, ...recentFoodIds.value.filter((id) => !foodIds.includes(id))].slice(0, MAX_RECENT_FOODS);
+  recentFoodIds.value = [
+    ...foodIds,
+    ...recentFoodIds.value.filter((id) => !foodIds.includes(id)),
+  ].slice(0, MAX_RECENT_FOODS);
   writeIdArrayToStorage(LIBRARY_RECENTS_KEY, recentFoodIds.value);
 };
 
@@ -282,24 +304,26 @@ const confirmFoodSelection = async (): Promise<void> => {
   const draft = await loadDraft<AddLogDraftSnapshot>(LOG_MODE_DRAFT_KEY);
   const currentLogItems = Array.isArray(draft?.logItems) ? draft.logItems : [];
   const nonLibraryItems = currentLogItems.filter(
-    (item) => item.origin !== "library_food" && item.origin !== "library_meal"
+    (item) => item.origin !== "library_food" && item.origin !== "library_meal",
   );
 
   const selectedLogItems = selectedFoodIds.value
     .map((foodId) => {
       const food = foods.find((candidate) => candidate.id === foodId);
       if (!food) return null;
-      const normalized = normalizeLogItemGrams(gramsByFoodId.value[foodId] ?? "100");
+      const normalized = normalizeLogItemGrams(
+        gramsByFoodId.value[foodId] ?? "100",
+      );
       const grams = normalized != null && normalized > 0 ? normalized : 100;
       return buildLogItemFromSavedFood(food, grams);
     })
     .filter((item): item is LogMealItem => !!item);
 
   const nextDraft: AddLogDraftSnapshot = {
-    ...(draft ?? {}),
+    ...draft,
     pendingLibrarySelectReturn: true,
     usedLibrarySource: selectedLogItems.length > 0,
-    logItems: [...nonLibraryItems, ...selectedLogItems]
+    logItems: [...nonLibraryItems, ...selectedLogItems],
   };
 
   await saveDraft(LOG_MODE_DRAFT_KEY, nextDraft);
@@ -319,14 +343,14 @@ const confirmMealSelection = async (): Promise<void> => {
   const draft = await loadDraft<AddLogDraftSnapshot>(LOG_MODE_DRAFT_KEY);
   const currentLogItems = Array.isArray(draft?.logItems) ? draft.logItems : [];
   const nonLibraryItems = currentLogItems.filter(
-    (item) => item.origin !== "library_food" && item.origin !== "library_meal"
+    (item) => item.origin !== "library_food" && item.origin !== "library_meal",
   );
 
   const nextDraft: AddLogDraftSnapshot = {
-    ...(draft ?? {}),
+    ...draft,
     pendingLibrarySelectReturn: true,
     usedLibrarySource: logItems.length > 0,
-    logItems: [...nonLibraryItems, ...logItems]
+    logItems: [...nonLibraryItems, ...logItems],
   };
 
   await saveDraft(LOG_MODE_DRAFT_KEY, nextDraft);
@@ -342,23 +366,35 @@ void preselectFromDraft();
   <section class="app-page feature feature-add-log pb-28">
     <header class="page-header">
       <h1 class="page-title">Select from Library</h1>
-      <p class="page-subtitle">Add individual foods or a full saved meal to your log.</p>
+      <p class="page-subtitle">
+        Add individual foods or a full saved meal to your log.
+      </p>
     </header>
 
     <!-- Tab bar + search -->
     <Card class="glass space-y-3 p-3 sm:p-5">
       <!-- Tab buttons -->
-      <div class="flex gap-1 rounded-xl border border-border/60 bg-muted/30 p-1">
+      <div
+        class="flex gap-1 rounded-xl border border-border/60 bg-muted/30 p-1"
+      >
         <button
           class="flex-1 rounded-lg py-1.5 text-sm font-semibold transition-all"
-          :class="activeTab === 'foods' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground'"
+          :class="
+            activeTab === 'foods'
+              ? 'bg-card shadow text-foreground'
+              : 'text-muted-foreground hover:text-foreground'
+          "
           @click="activeTab = 'foods'"
         >
           Foods
         </button>
         <button
           class="flex-1 rounded-lg py-1.5 text-sm font-semibold transition-all"
-          :class="activeTab === 'meals' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground'"
+          :class="
+            activeTab === 'meals'
+              ? 'bg-card shadow text-foreground'
+              : 'text-muted-foreground hover:text-foreground'
+          "
           @click="activeTab = 'meals'"
         >
           Meals
@@ -369,7 +405,11 @@ void preselectFromDraft();
       <template v-if="activeTab === 'foods'">
         <Input v-model="searchText" placeholder="Search library foods..." />
         <div class="flex flex-wrap gap-2">
-          <Button size="sm" :variant="activeFilter === 'all' ? 'default' : 'outline'" @click="activeFilter = 'all'">
+          <Button
+            size="sm"
+            :variant="activeFilter === 'all' ? 'default' : 'outline'"
+            @click="activeFilter = 'all'"
+          >
             All
           </Button>
           <Button
@@ -379,7 +419,11 @@ void preselectFromDraft();
           >
             Favorites
           </Button>
-          <Button size="sm" :variant="activeFilter === 'recent' ? 'default' : 'outline'" @click="activeFilter = 'recent'">
+          <Button
+            size="sm"
+            :variant="activeFilter === 'recent' ? 'default' : 'outline'"
+            @click="activeFilter = 'recent'"
+          >
             Recent
           </Button>
         </div>
@@ -392,19 +436,22 @@ void preselectFromDraft();
     </Card>
 
     <!-- Foods list -->
-    <Card v-if="activeTab === 'foods'" class="mt-3 space-y-3 p-3 sm:p-5">
-      <div v-if="foodsQuery.isPending.value" class="rounded-xl border border-dashed border-border/80 py-8 text-center text-sm text-muted-foreground">
+    <section v-if="activeTab === 'foods'" class="stack-section mt-3">
+      <div
+        v-if="foodsQuery.isPending.value"
+        class="stack-section-state stack-section-state-dashed"
+      >
         Loading library foods...
       </div>
 
       <div
         v-else-if="filteredFoods.length === 0"
-        class="rounded-xl border border-dashed border-border/80 p-6 text-center text-sm text-muted-foreground"
+        class="stack-section-state stack-section-state-dashed"
       >
         No foods found.
       </div>
 
-      <div v-else class="space-y-2">
+      <div v-else class="stack-section-list">
         <article
           v-for="food in filteredFoods"
           :key="food.id"
@@ -427,15 +474,21 @@ void preselectFromDraft();
               <div>
                 <p class="text-sm font-semibold">{{ food.name }}</p>
                 <p class="text-xs text-muted-foreground">
-                  {{ formatMacro(food.calories_per_100g, 1) }} kcal/100g ·
-                  P{{ formatMacro(food.protein_per_100g, 1) }} ·
-                  C{{ formatMacro(food.carbs_per_100g, 1) }} ·
-                  F{{ formatMacro(food.fat_per_100g, 1) }}
+                  {{ formatMacro(food.calories_per_100g, 1) }} kcal/100g · P{{
+                    formatMacro(food.protein_per_100g, 1)
+                  }}
+                  · C{{ formatMacro(food.carbs_per_100g, 1) }} · F{{
+                    formatMacro(food.fat_per_100g, 1)
+                  }}
                 </p>
               </div>
             </label>
 
-            <Button variant="ghost" size="sm" @click.stop="toggleFavorite(food.id)">
+            <Button
+              variant="ghost"
+              size="sm"
+              @click.stop="toggleFavorite(food.id)"
+            >
               {{ favoriteFoodIds.includes(food.id) ? "★" : "☆" }}
             </Button>
           </div>
@@ -459,30 +512,40 @@ void preselectFromDraft();
         </article>
       </div>
 
-      <p v-if="foodsQuery.error.value" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      <p
+        v-if="foodsQuery.error.value"
+        class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+      >
         {{ (foodsQuery.error.value as Error).message }}
       </p>
-    </Card>
+    </section>
 
     <!-- Meals list -->
-    <Card v-else class="mt-3 space-y-3 p-3 sm:p-5">
-      <div v-if="mealsQuery.isPending.value" class="rounded-xl border border-dashed border-border/80 py-8 text-center text-sm text-muted-foreground">
+    <section v-else class="stack-section mt-3">
+      <div
+        v-if="mealsQuery.isPending.value"
+        class="stack-section-state stack-section-state-dashed"
+      >
         Loading saved meals...
       </div>
 
       <div
         v-else-if="filteredMeals.length === 0"
-        class="rounded-xl border border-dashed border-border/80 p-6 text-center text-sm text-muted-foreground"
+        class="stack-section-state stack-section-state-dashed"
       >
         No saved meals found. Create a meal in the Library tab first.
       </div>
 
-      <div v-else class="space-y-2">
+      <div v-else class="stack-section-list">
         <article
           v-for="meal in filteredMeals"
           :key="meal.id"
           class="rounded-2xl border bg-card/70 overflow-hidden"
-          :class="isMealSelected(meal.id) ? 'border-[hsl(var(--feature-primary)/0.5)]' : 'border-border/70'"
+          :class="
+            isMealSelected(meal.id)
+              ? 'border-[hsl(var(--feature-primary)/0.5)]'
+              : 'border-border/70'
+          "
         >
           <!-- Meal header row -->
           <div
@@ -503,23 +566,38 @@ void preselectFromDraft();
               />
               <div>
                 <p class="text-sm font-semibold">{{ meal.name }}</p>
-                <p class="text-xs text-muted-foreground">Tap to expand and adjust ingredient grams</p>
+                <p class="text-xs text-muted-foreground">
+                  Tap to expand and adjust ingredient grams
+                </p>
               </div>
             </div>
-            <span class="mt-0.5 text-xs text-muted-foreground transition-transform" :class="isMealSelected(meal.id) ? 'rotate-180' : ''">▾</span>
+            <span
+              class="mt-0.5 text-xs text-muted-foreground transition-transform"
+              :class="isMealSelected(meal.id) ? 'rotate-180' : ''"
+              >▾</span
+            >
           </div>
 
           <!-- Ingredient list (expanded) -->
           <template v-if="isMealSelected(meal.id)">
-            <div v-if="isMealLoading(meal.id)" class="border-t border-border/50 px-3 py-4 text-center text-sm text-muted-foreground">
+            <div
+              v-if="isMealLoading(meal.id)"
+              class="border-t border-border/50 px-3 py-4 text-center text-sm text-muted-foreground"
+            >
               Loading ingredients...
             </div>
 
-            <div v-else-if="mealIngredientsByMealId[meal.id]?.length === 0" class="border-t border-border/50 px-3 py-4 text-center text-sm text-muted-foreground">
+            <div
+              v-else-if="mealIngredientsByMealId[meal.id]?.length === 0"
+              class="border-t border-border/50 px-3 py-4 text-center text-sm text-muted-foreground"
+            >
               This meal has no ingredients saved.
             </div>
 
-            <div v-else class="border-t border-border/50 divide-y divide-border/40">
+            <div
+              v-else
+              class="border-t border-border/50 divide-y divide-border/40"
+            >
               <div
                 v-for="ingredient in mealIngredientsByMealId[meal.id]"
                 :key="ingredient.id"
@@ -528,10 +606,16 @@ void preselectFromDraft();
                 <div>
                   <p class="text-sm font-medium">{{ ingredient.name }}</p>
                   <p class="text-xs text-muted-foreground">
-                    {{ Math.round(ingredientScaledMacros(ingredient).calories) }} kcal ·
-                    P{{ Math.round(ingredientScaledMacros(ingredient).protein) }}g ·
-                    C{{ Math.round(ingredientScaledMacros(ingredient).carbs) }}g ·
-                    F{{ Math.round(ingredientScaledMacros(ingredient).fat) }}g
+                    {{
+                      Math.round(ingredientScaledMacros(ingredient).calories)
+                    }}
+                    kcal · P{{
+                      Math.round(ingredientScaledMacros(ingredient).protein)
+                    }}g · C{{
+                      Math.round(ingredientScaledMacros(ingredient).carbs)
+                    }}g · F{{
+                      Math.round(ingredientScaledMacros(ingredient).fat)
+                    }}g
                   </p>
                 </div>
                 <div class="w-24">
@@ -543,7 +627,11 @@ void preselectFromDraft();
                     placeholder="g"
                     @click.stop
                   />
-                  <p class="mt-0.5 text-center text-[10px] text-muted-foreground">grams</p>
+                  <p
+                    class="mt-0.5 text-center text-[10px] text-muted-foreground"
+                  >
+                    grams
+                  </p>
                 </div>
               </div>
             </div>
@@ -551,20 +639,32 @@ void preselectFromDraft();
         </article>
       </div>
 
-      <p v-if="mealLoadError" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      <p
+        v-if="mealLoadError"
+        class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+      >
         {{ mealLoadError }}
       </p>
 
-      <p v-if="mealsQuery.error.value" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      <p
+        v-if="mealsQuery.error.value"
+        class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+      >
         {{ (mealsQuery.error.value as Error).message }}
       </p>
-    </Card>
+    </section>
 
     <!-- Fixed bottom bar -->
-    <div class="fixed inset-x-0 bottom-0 z-20 border-t border-border/70 bg-card/95 px-4 py-3 backdrop-blur sm:left-auto sm:right-auto sm:w-full sm:max-w-screen-sm sm:rounded-t-2xl">
+    <div
+      class="fixed inset-x-0 bottom-0 z-20 border-t border-border/70 bg-card/95 px-4 py-3 backdrop-blur sm:left-auto sm:right-auto sm:w-full sm:max-w-screen-sm sm:rounded-t-2xl"
+    >
       <div class="mx-auto grid max-w-screen-sm grid-cols-2 gap-2">
         <Button variant="ghost" @click="returnToAddLog">Cancel</Button>
-        <Button v-if="activeTab === 'foods'" :disabled="selectedCount === 0" @click="confirmFoodSelection">
+        <Button
+          v-if="activeTab === 'foods'"
+          :disabled="selectedCount === 0"
+          @click="confirmFoodSelection"
+        >
           Add Selected ({{ selectedCount }})
         </Button>
         <Button v-else :disabled="!canSaveMeal" @click="confirmMealSelection">

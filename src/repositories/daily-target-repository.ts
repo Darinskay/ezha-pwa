@@ -11,12 +11,12 @@ const toPayload = (name: string, calories: number, protein: number, carbs: numbe
 });
 
 export const dailyTargetRepository = {
-  async fetchTargets(): Promise<DailyTarget[]> {
-    const userId = await getUserId();
+  async fetchTargets(userId?: string): Promise<DailyTarget[]> {
+    const resolvedUserId = userId ?? await getUserId();
     const { data, error } = await supabaseClient
       .from("daily_targets")
       .select("*")
-      .eq("user_id", userId)
+      .eq("user_id", resolvedUserId)
       .order("created_at", { ascending: true });
 
     ensureNoError(error);
@@ -44,8 +44,9 @@ export const dailyTargetRepository = {
     ensureNoError(error);
   },
 
-  async ensureTargets(profile: Profile): Promise<DailyTarget[]> {
-    const existing = await this.fetchTargets();
+  async ensureTargets(profile: Profile, userId?: string): Promise<DailyTarget[]> {
+    const resolvedUserId = userId ?? profile.user_id;
+    const existing = await this.fetchTargets(resolvedUserId);
     if (existing.length > 0) {
       return existing;
     }
@@ -58,7 +59,7 @@ export const dailyTargetRepository = {
       profile.fat_target
     );
 
-    return this.fetchTargets();
+    return this.fetchTargets(resolvedUserId);
   },
 
   async fetchTarget(id: string): Promise<DailyTarget | null> {

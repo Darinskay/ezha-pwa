@@ -16,53 +16,18 @@ retryQueueService.register("create_food_entry", async (payload) => {
   await foodEntryRepository.insertFoodEntry(typed.entry, typed.items);
 });
 
-retryQueueService.start();
+const scheduleAfterInitialRender = (task: () => void): void => {
+  const run = (): void => {
+    window.setTimeout(task, 0);
+  };
 
-let isHardUpdatingServiceWorker = false;
-
-const clearServiceWorkerCaches = async (): Promise<void> => {
-  if (!("caches" in window)) return;
-  const keys = await caches.keys();
-  await Promise.all(keys.map((key) => caches.delete(key)));
-};
-
-const hardUpdateServiceWorker = async (
-  triggerUpdate: (reloadPage?: boolean) => Promise<void>
-): Promise<void> => {
-  if (isHardUpdatingServiceWorker) return;
-  isHardUpdatingServiceWorker = true;
-
-  try {
-    await clearServiceWorkerCaches();
-    await triggerUpdate(true);
-  } catch {
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(registrations.map((registration) => registration.unregister()));
-    await clearServiceWorkerCaches();
-    window.location.reload();
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(run, { timeout: 2_000 });
     return;
   }
 
-  window.setTimeout(() => {
-    window.location.reload();
-  }, 1500);
+  window.setTimeout(run, 1_500);
 };
-
-let updateServiceWorker: ((reloadPage?: boolean) => Promise<void>) | null = null;
-
-updateServiceWorker = registerSW({
-  immediate: true,
-  onNeedRefresh() {
-    if (!updateServiceWorker) return;
-    void hardUpdateServiceWorker(updateServiceWorker);
-  },
-  onRegisteredSW(_swUrl, registration) {
-    if (!registration) return;
-    window.setInterval(() => {
-      void registration.update();
-    }, 60_000);
-  }
-});
 
 const app = createApp(App);
 const pinia = createPinia();
@@ -73,3 +38,16 @@ app.use(router);
 app.use(VueQueryPlugin, { queryClient });
 
 app.mount("#app");
+
+scheduleAfterInitialRender(() => {
+  retryQueueService.start();
+
+  registerSW({
+    onRegisteredSW(_swUrl, registration) {
+      if (!registration) return;
+      window.setInterval(() => {
+        void registration.update();
+      }, 30 * 60_000);
+    }
+  });
+});
