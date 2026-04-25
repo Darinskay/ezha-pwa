@@ -63,9 +63,21 @@ body {
   margin: 0;
   background-color: hsl(var(--background));
   background-image:
-    radial-gradient(circle at 0% 0%, hsl(var(--feature-primary) / 0.07), transparent 32%),
-    radial-gradient(circle at 100% 0%, hsl(var(--feature-secondary) / 0.08), transparent 28%),
-    radial-gradient(circle at 10% 100%, hsl(var(--feature-secondary) / 0.05), transparent 30%),
+    radial-gradient(
+      circle at 0% 0%,
+      hsl(var(--feature-primary) / 0.07),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 100% 0%,
+      hsl(var(--feature-secondary) / 0.08),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 10% 100%,
+      hsl(var(--feature-secondary) / 0.05),
+      transparent 30%
+    ),
     linear-gradient(180deg, hsl(var(--background)), hsl(var(--background)));
   transition:
     background-image 0.45s ease,
@@ -74,9 +86,21 @@ body {
 
 .dark body {
   background-image:
-    radial-gradient(circle at 0% 0%, hsl(var(--feature-primary) / 0.2), transparent 35%),
-    radial-gradient(circle at 100% 0%, hsl(var(--feature-secondary) / 0.16), transparent 32%),
-    radial-gradient(circle at 10% 100%, hsl(var(--feature-secondary) / 0.12), transparent 36%),
+    radial-gradient(
+      circle at 0% 0%,
+      hsl(var(--feature-primary) / 0.2),
+      transparent 35%
+    ),
+    radial-gradient(
+      circle at 100% 0%,
+      hsl(var(--feature-secondary) / 0.16),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 10% 100%,
+      hsl(var(--feature-secondary) / 0.12),
+      transparent 36%
+    ),
     linear-gradient(180deg, hsl(var(--background)), hsl(var(--background)));
 }
 
@@ -113,8 +137,16 @@ body {
   z-index: -1;
   height: 55vh;
   background:
-    radial-gradient(circle at 12% 35%, hsl(var(--feature-primary) / 0.14), transparent 54%),
-    radial-gradient(circle at 82% 42%, hsl(var(--feature-secondary) / 0.12), transparent 58%);
+    radial-gradient(
+      circle at 12% 35%,
+      hsl(var(--feature-primary) / 0.14),
+      transparent 54%
+    ),
+    radial-gradient(
+      circle at 82% 42%,
+      hsl(var(--feature-secondary) / 0.12),
+      transparent 58%
+    );
   filter: blur(56px);
   pointer-events: none;
 }
@@ -237,7 +269,11 @@ body {
   }
 
   .dark .page-title {
-    background-image: linear-gradient(122deg, hsl(var(--feature-primary)), hsl(var(--feature-secondary)));
+    background-image: linear-gradient(
+      122deg,
+      hsl(var(--feature-primary)),
+      hsl(var(--feature-secondary))
+    );
     -webkit-background-clip: text;
     color: transparent;
   }
@@ -282,18 +318,48 @@ body {
     border-top: 1px solid hsl(var(--feature-primary) / 0.22);
   }
 
+  .stack-section {
+    @apply space-y-3;
+  }
+
+  .stack-section-header {
+    @apply flex items-center justify-between gap-3;
+  }
+
+  .stack-section-meta {
+    @apply rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground;
+  }
+
+  .stack-section-state {
+    @apply rounded-xl border p-6 text-center text-sm;
+  }
+
+  .stack-section-state-dashed {
+    @apply border-dashed border-border/80 text-muted-foreground;
+  }
+
+  .stack-section-list {
+    @apply space-y-2;
+  }
+
   .stat-chip {
     @apply rounded-xl px-2.5 py-1.5 sm:rounded-2xl sm:px-3 sm:py-2;
     border: 1px solid hsl(var(--feature-primary) / 0.23);
-    background:
-      linear-gradient(160deg, hsl(var(--feature-soft) / 0.9), hsl(var(--card) / 0.88));
+    background: linear-gradient(
+      160deg,
+      hsl(var(--feature-soft) / 0.9),
+      hsl(var(--card) / 0.88)
+    );
     box-shadow: inset 0 1px 0 hsl(var(--glass-highlight) / 0.66);
   }
 
   .dark .stat-chip {
     border-color: hsl(var(--feature-primary) / 0.34);
-    background:
-      linear-gradient(160deg, hsl(var(--feature-soft-strong) / 0.95), hsl(var(--card) / 0.95));
+    background: linear-gradient(
+      160deg,
+      hsl(var(--feature-soft-strong) / 0.95),
+      hsl(var(--card) / 0.95)
+    );
     box-shadow: inset 0 1px 0 hsl(var(--glass-highlight) / 0.12);
   }
 
@@ -332,8 +398,16 @@ body {
     @apply fixed inset-0 z-50 grid items-end px-2 pb-[max(env(safe-area-inset-bottom),0.65rem)] pt-10 sm:place-items-center sm:p-4;
     background:
       linear-gradient(180deg, hsl(220 34% 6% / 0.44), hsl(220 34% 6% / 0.55)),
-      radial-gradient(circle at 16% 8%, hsl(var(--feature-primary) / 0.3), transparent 42%),
-      radial-gradient(circle at 83% 7%, hsl(var(--feature-secondary) / 0.26), transparent 44%);
+      radial-gradient(
+        circle at 16% 8%,
+        hsl(var(--feature-primary) / 0.3),
+        transparent 42%
+      ),
+      radial-gradient(
+        circle at 83% 7%,
+        hsl(var(--feature-secondary) / 0.26),
+        transparent 44%
+      );
     backdrop-filter: blur(16px);
   }
 }

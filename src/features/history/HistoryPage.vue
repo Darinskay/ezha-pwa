@@ -2,9 +2,14 @@
 import { computed, reactive, ref } from "vue";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import Button from "@/components/ui/Button.vue";
-import Card from "@/components/ui/Card.vue";
 import FoodEntryCard from "@/components/FoodEntryCard.vue";
-import { addDays, displayDate, nowDateKey, parseDateKey, toDateKey } from "@/lib/date";
+import {
+  addDays,
+  displayDate,
+  nowDateKey,
+  parseDateKey,
+  toDateKey,
+} from "@/lib/date";
 import { dailySummaryRepository } from "@/repositories/daily-summary-repository";
 import { foodEntryRepository } from "@/repositories/food-entry-repository";
 import { profileRepository } from "@/repositories/profile-repository";
@@ -33,22 +38,29 @@ const loadHistory = async (): Promise<HistoryData> => {
   const end = addDays(endDate, -1);
   const start = addDays(end, -59);
 
-  const summaries = await dailySummaryRepository.fetchSummaries(toDateKey(start), toDateKey(end));
+  const summaries = await dailySummaryRepository.fetchSummaries(
+    toDateKey(start),
+    toDateKey(end),
+  );
   return {
     activeDate,
-    summaries: summaries.filter((summary) => summary.has_data).sort((a, b) => b.date.localeCompare(a.date))
+    summaries: summaries
+      .filter((summary) => summary.has_data)
+      .sort((a, b) => b.date.localeCompare(a.date)),
   };
 };
 
 const historyQuery = useQuery({
   queryKey: queryKeys.history,
-  queryFn: loadHistory
+  queryFn: loadHistory,
 });
 const historyData = computed(() => historyQuery.data.value);
-const historyError = computed(() => (historyQuery.error.value as Error | null) ?? null);
+const historyError = computed(
+  () => (historyQuery.error.value as Error | null) ?? null,
+);
 
 const isActiveDateToday = computed(
-  () => historyQuery.data.value?.activeDate === nowDateKey()
+  () => historyQuery.data.value?.activeDate === nowDateKey(),
 );
 
 const loadEntries = async (date: string): Promise<void> => {
@@ -57,9 +69,11 @@ const loadEntries = async (date: string): Promise<void> => {
   loadingDates.add(date);
   entryErrors[date] = "";
   try {
-    entriesByDate[date] = await foodEntryRepository.fetchEntriesWithItemsByDateKey(date);
+    entriesByDate[date] =
+      await foodEntryRepository.fetchEntriesWithItemsByDateKey(date);
   } catch (error) {
-    entryErrors[date] = error instanceof Error ? error.message : "Unable to load entries.";
+    entryErrors[date] =
+      error instanceof Error ? error.message : "Unable to load entries.";
     entriesByDate[date] = [];
   } finally {
     loadingDates.delete(date);
@@ -82,9 +96,9 @@ const goToDateMutation = useMutation({
       queryClient.invalidateQueries({ queryKey: queryKeys.todaySummary }),
       queryClient.invalidateQueries({ queryKey: queryKeys.todayEntries }),
       queryClient.invalidateQueries({ queryKey: queryKeys.history }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext })
+      queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext }),
     ]);
-  }
+  },
 });
 
 const goToDate = async (date: string): Promise<void> => {
@@ -104,16 +118,25 @@ const percent = (value: number, target: number): number => {
       <p class="page-subtitle">Previous completed days (up to last 60 days).</p>
     </header>
 
-    <Card class="space-y-3 p-3 sm:p-5">
-      <div v-if="historyQuery.isPending.value" class="rounded-xl border border-dashed border-border/80 py-8 text-center text-sm text-muted-foreground">
+    <section class="stack-section">
+      <div
+        v-if="historyQuery.isPending.value"
+        class="stack-section-state stack-section-state-dashed"
+      >
         Loading history...
       </div>
 
-      <p v-else-if="historyError" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      <p
+        v-else-if="historyError"
+        class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+      >
         {{ historyError.message }}
       </p>
 
-      <div v-else-if="!historyData?.summaries.length" class="rounded-xl border border-dashed border-border/80 p-6 text-sm text-muted-foreground">
+      <div
+        v-else-if="!historyData?.summaries.length"
+        class="stack-section-state stack-section-state-dashed text-left"
+      >
         No entries yet.
       </div>
 
@@ -127,25 +150,46 @@ const percent = (value: number, target: number): number => {
             <div class="flex items-center justify-between gap-3">
               <div>
                 <h3 class="font-semibold">{{ displayDate(summary.date) }}</h3>
-                <p v-if="summary.daily_target_name" class="text-xs text-muted-foreground">Target: {{ summary.daily_target_name }}</p>
+                <p
+                  v-if="summary.daily_target_name"
+                  class="text-xs text-muted-foreground"
+                >
+                  Target: {{ summary.daily_target_name }}
+                </p>
               </div>
-              <span class="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              <span
+                class="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground"
+              >
                 {{ expandedDate === summary.date ? "Hide" : "Show" }}
               </span>
             </div>
 
-            <div class="mt-2 grid grid-cols-1 gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+            <div
+              class="mt-2 grid grid-cols-1 gap-1 text-xs text-muted-foreground sm:grid-cols-2"
+            >
               <p>
-                Calories: {{ Math.round(summary.calories) }} / {{ Math.round(summary.calories_target) }} ({{ percent(summary.calories, summary.calories_target) }}%)
+                Calories: {{ Math.round(summary.calories) }} /
+                {{ Math.round(summary.calories_target) }} ({{
+                  percent(summary.calories, summary.calories_target)
+                }}%)
               </p>
               <p>
-                Protein: {{ Math.round(summary.protein) }} / {{ Math.round(summary.protein_target) }} ({{ percent(summary.protein, summary.protein_target) }}%)
+                Protein: {{ Math.round(summary.protein) }} /
+                {{ Math.round(summary.protein_target) }} ({{
+                  percent(summary.protein, summary.protein_target)
+                }}%)
               </p>
               <p>
-                Carbs: {{ Math.round(summary.carbs) }} / {{ Math.round(summary.carbs_target) }} ({{ percent(summary.carbs, summary.carbs_target) }}%)
+                Carbs: {{ Math.round(summary.carbs) }} /
+                {{ Math.round(summary.carbs_target) }} ({{
+                  percent(summary.carbs, summary.carbs_target)
+                }}%)
               </p>
               <p>
-                Fat: {{ Math.round(summary.fat) }} / {{ Math.round(summary.fat_target) }} ({{ percent(summary.fat, summary.fat_target) }}%)
+                Fat: {{ Math.round(summary.fat) }} /
+                {{ Math.round(summary.fat_target) }} ({{
+                  percent(summary.fat, summary.fat_target)
+                }}%)
               </p>
             </div>
           </button>
@@ -159,9 +203,22 @@ const percent = (value: number, target: number): number => {
             Go to this date
           </Button>
 
-          <div v-if="expandedDate === summary.date" class="mt-3 space-y-2 border-t border-border/70 pt-3">
-            <p v-if="loadingDates.has(summary.date)" class="text-sm text-muted-foreground">Loading entries...</p>
-            <p v-else-if="entryErrors[summary.date]" class="text-sm text-destructive">{{ entryErrors[summary.date] }}</p>
+          <div
+            v-if="expandedDate === summary.date"
+            class="mt-3 space-y-2 border-t border-border/70 pt-3"
+          >
+            <p
+              v-if="loadingDates.has(summary.date)"
+              class="text-sm text-muted-foreground"
+            >
+              Loading entries...
+            </p>
+            <p
+              v-else-if="entryErrors[summary.date]"
+              class="text-sm text-destructive"
+            >
+              {{ entryErrors[summary.date] }}
+            </p>
             <p
               v-else-if="(entriesByDate[summary.date] ?? []).length === 0"
               class="text-sm text-muted-foreground"
@@ -178,6 +235,6 @@ const percent = (value: number, target: number): number => {
           </div>
         </article>
       </div>
-    </Card>
+    </section>
   </section>
 </template>

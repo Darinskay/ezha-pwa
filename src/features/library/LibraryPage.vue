@@ -22,7 +22,7 @@ const loggingMeal = ref<SavedFood | null>(null);
 
 const foodsQuery = useQuery({
   queryKey: queryKeys.library,
-  queryFn: async () => savedFoodRepository.fetchFoods()
+  queryFn: async () => savedFoodRepository.fetchFoods(),
 });
 
 const filteredFoods = computed(() => {
@@ -40,7 +40,7 @@ const deleteFoodMutation = useMutation({
     await Promise.all([
       localQueryClient.invalidateQueries({ queryKey: queryKeys.library }),
     ]);
-  }
+  },
 });
 
 const saveFoodMutation = useMutation({
@@ -50,7 +50,7 @@ const saveFoodMutation = useMutation({
   onSuccess: async () => {
     editingFood.value = null;
     await localQueryClient.invalidateQueries({ queryKey: queryKeys.library });
-  }
+  },
 });
 
 const openAddFood = async (): Promise<void> => {
@@ -74,7 +74,7 @@ const onMealSaved = async (): Promise<void> => {
     queryClient.invalidateQueries({ queryKey: queryKeys.todaySummary }),
     queryClient.invalidateQueries({ queryKey: queryKeys.todayEntries }),
     queryClient.invalidateQueries({ queryKey: queryKeys.history }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext })
+    queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext }),
   ]);
 };
 </script>
@@ -91,26 +91,29 @@ const onMealSaved = async (): Promise<void> => {
       <Input v-model="searchText" placeholder="Search your library..." />
     </Card>
 
-    <Card class="space-y-3 p-3 sm:p-5">
-      <div class="flex items-center justify-between gap-3">
+    <section class="stack-section">
+      <div class="stack-section-header">
         <h2 class="text-lg font-semibold">Saved foods</h2>
-        <span class="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+        <span class="stack-section-meta">
           {{ filteredFoods.length }} items
         </span>
       </div>
 
-      <div v-if="foodsQuery.isPending.value" class="rounded-xl border border-dashed border-border/80 py-8 text-center text-sm text-muted-foreground">
+      <div
+        v-if="foodsQuery.isPending.value"
+        class="stack-section-state stack-section-state-dashed"
+      >
         Loading...
       </div>
 
       <div
         v-else-if="filteredFoods.length === 0"
-        class="rounded-xl border border-dashed border-border/80 p-6 text-center text-sm text-muted-foreground"
+        class="stack-section-state stack-section-state-dashed"
       >
         No saved foods.
       </div>
 
-      <div v-else class="space-y-2">
+      <div v-else class="stack-section-list">
         <article
           v-for="food in filteredFoods"
           :key="food.id"
@@ -119,10 +122,22 @@ const onMealSaved = async (): Promise<void> => {
           <div class="space-y-1">
             <h3 class="font-semibold">{{ food.name }}</h3>
             <p class="text-xs text-muted-foreground">
-              {{ food.is_meal ? "Meal" : food.unit_type === "per_100g" ? "Per 100g" : "Per serving" }} ·
-              {{ Math.round(food.calories_per_100g) }} kcal /100g
+              {{
+                food.is_meal
+                  ? "Meal"
+                  : food.unit_type === "per_100g"
+                    ? "Per 100g"
+                    : "Per serving"
+              }}
+              · {{ Math.round(food.calories_per_100g) }} kcal /100g
             </p>
-            <Button v-if="food.is_meal" variant="secondary" size="sm" class="mt-2 w-fit" @click="loggingMeal = food">
+            <Button
+              v-if="food.is_meal"
+              variant="secondary"
+              size="sm"
+              class="mt-2 w-fit"
+              @click="loggingMeal = food"
+            >
               Log
             </Button>
           </div>
@@ -151,10 +166,13 @@ const onMealSaved = async (): Promise<void> => {
         </article>
       </div>
 
-      <p v-if="foodsQuery.error.value" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      <p
+        v-if="foodsQuery.error.value"
+        class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+      >
         {{ (foodsQuery.error.value as Error).message }}
       </p>
-    </Card>
+    </section>
 
     <FoodEditorDialog
       v-if="editingFood"
