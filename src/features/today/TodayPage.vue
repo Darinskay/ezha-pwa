@@ -15,23 +15,15 @@ import { dailyTargetRepository } from "@/repositories/daily-target-repository";
 import { foodEntryRepository } from "@/repositories/food-entry-repository";
 import { profileRepository } from "@/repositories/profile-repository";
 import { queryKeys } from "@/query/keys";
-import { ensureProfileAndTargets, resolveActiveTarget } from "@/services/profile-bootstrap";
+import { fetchTodayBootstrap } from "@/services/profile-bootstrap";
 import { useActiveDayStore } from "@/stores/active-day-store";
-import type { DailySummary, DailyTarget, MacroTargets, MacroTotals } from "@/types/domain";
-
-interface TodayData {
-  activeDate: string;
-  targets: MacroTargets;
-  totals: MacroTotals;
-  availableTargets: DailyTarget[];
-  activeTarget?: DailyTarget;
-  entriesWithItems: Awaited<ReturnType<typeof foodEntryRepository.fetchEntriesWithItemsByDateKey>>;
-}
+import type { DailySummary, DailyTarget } from "@/types/domain";
 
 const router = useRouter();
 const queryClient = useQueryClient();
 const activeDayStore = useActiveDayStore();
 
+const isOpeningAddLog = ref(false);
 const showTargetChooser = ref(false);
 const selectedTargetId = ref<string>("");
 const startNewDayError = ref<string | null>(null);
@@ -39,48 +31,28 @@ const startNewDayWarning = ref<string | null>(null);
 const showDeleteToast = ref(false);
 let deleteToastTimer: ReturnType<typeof setTimeout> | null = null;
 
-const loadToday = async (): Promise<TodayData> => {
-  const { profile, targets } = await ensureProfileAndTargets();
-  const activeTarget = await resolveActiveTarget(profile, targets);
-
-  const summary = await dailySummaryRepository.fetchSummary(profile.active_date);
-  const resolvedTargets: MacroTargets = summary
-    ? {
-        calories: Math.round(summary.calories_target),
-        protein: Math.round(summary.protein_target),
-        carbs: Math.round(summary.carbs_target),
-        fat: Math.round(summary.fat_target)
-      }
-    : activeTarget
-      ? {
-          calories: Math.round(activeTarget.calories_target),
-          protein: Math.round(activeTarget.protein_target),
-          carbs: Math.round(activeTarget.carbs_target),
-          fat: Math.round(activeTarget.fat_target)
-        }
-      : EXAMPLE_TARGETS;
-
-  const entriesWithItems = await foodEntryRepository.fetchEntriesWithItemsByDateKey(profile.active_date);
-  const totals = toMacroTotals(entriesWithItems.map((entry) => entry.entry));
-
-  activeDayStore.setActiveDate(profile.active_date);
-
-  return {
-    activeDate: profile.active_date,
-    targets: resolvedTargets,
-    totals,
-    availableTargets: targets,
-    activeTarget,
-    entriesWithItems
-  };
-};
-
-const todayQuery = useQuery({
-  queryKey: queryKeys.today,
-  queryFn: loadToday
+const todaySummaryQuery = useQuery({
+  queryKey: queryKeys.todaySummary,
+  queryFn: async () => {
+    const data = await fetchTodayBootstrap();
+    activeDayStore.setActiveDate(data.activeDate);
+    return data;
+  }
 });
-const todayData = computed(() => todayQuery.data.value);
-const todayError = computed(() => (todayQuery.error.value as Error | null) ?? null);
+const todayData = computed(() => todaySummaryQuery.data.value);
+const todayError = computed(() => (todaySummaryQuery.error.value as Error | null) ?? null);
+
+const todayEntriesQuery = useQuery({
+  queryKey: computed(() => queryKeys.todayEntriesByDate(todayData.value?.activeDate ?? "pending")),
+  enabled: computed(() => !!todayData.value?.activeDate),
+  queryFn: async () => {
+    const entries = todaySummaryQuery.data.value?.entries ?? [];
+    return foodEntryRepository.fetchItemsForEntries(entries);
+  }
+});
+
+const entriesWithItems = computed(() => todayEntriesQuery.data.value ?? []);
+const entriesError = computed(() => (todayEntriesQuery.error.value as Error | null) ?? null);
 
 const startNewDayMutation = useMutation({
   mutationFn: async (nextTarget: DailyTarget) => {
@@ -92,7 +64,7 @@ const startNewDayMutation = useMutation({
 
     const summaryForActiveDate = await dailySummaryRepository.fetchSummary(profile.active_date);
     const currentTarget =
-      todayQuery.data.value?.activeTarget ??
+      todaySummaryQuery.data.value?.activeTarget ??
       (profile.active_target_id ? await dailyTargetRepository.fetchTarget(profile.active_target_id) : null);
 
     const entries = await foodEntryRepository.fetchEntriesByDateKey(profile.active_date);
@@ -140,7 +112,8 @@ const startNewDayMutation = useMutation({
     }
     showTargetChooser.value = false;
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.today }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.todaySummary }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.todayEntries }),
       queryClient.invalidateQueries({ queryKey: queryKeys.history }),
       queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext })
     ]);
@@ -156,7 +129,8 @@ const deleteEntryMutation = useMutation({
   },
   onSuccess: async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.today }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.todaySummary }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.todayEntries }),
       queryClient.invalidateQueries({ queryKey: queryKeys.history }),
       queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext })
     ]);
@@ -167,7 +141,7 @@ const deleteEntryMutation = useMutation({
 });
 
 const title = computed(() => {
-  const activeDate = todayQuery.data.value?.activeDate;
+  const activeDate = todaySummaryQuery.data.value?.activeDate;
   if (!activeDate) return "Today";
   const parsed = parseDateKey(activeDate);
   if (!parsed) return "Today";
@@ -179,11 +153,17 @@ const title = computed(() => {
 });
 
 const openAddLog = async (): Promise<void> => {
-  await router.push({ name: "add-log", query: { mode: "log" } });
+  if (isOpeningAddLog.value) return;
+  isOpeningAddLog.value = true;
+  try {
+    await router.push({ name: "add-log", query: { mode: "log" } });
+  } finally {
+    isOpeningAddLog.value = false;
+  }
 };
 
 const startNewDay = async (): Promise<void> => {
-  const data = todayQuery.data.value;
+  const data = todaySummaryQuery.data.value;
   if (!data || data.availableTargets.length === 0) return;
 
   if (data.availableTargets.length === 1) {
@@ -200,7 +180,7 @@ const startNewDay = async (): Promise<void> => {
 };
 
 const confirmStartNewDay = async (): Promise<void> => {
-  const data = todayQuery.data.value;
+  const data = todaySummaryQuery.data.value;
   if (!data) return;
   const nextTarget = data.availableTargets.find((target) => target.id === selectedTargetId.value);
   if (!nextTarget) return;
@@ -241,6 +221,10 @@ const macroStatusClass = (target: number, eaten: number): string => {
 };
 
 const canStartNewDay = computed(() => !!todayData.value && todayData.value.availableTargets.length > 0);
+const isSummaryPending = computed(() => todaySummaryQuery.isPending.value);
+const isEntriesPending = computed(() => todayEntriesQuery.isPending.value || todayEntriesQuery.isFetching.value);
+const summarySkeletonCards = Array.from({ length: 4 }, (_, index) => index);
+const entrySkeletonRows = Array.from({ length: 2 }, (_, index) => index);
 </script>
 
 <template>
@@ -251,7 +235,17 @@ const canStartNewDay = computed(() => !!todayData.value && todayData.value.avail
     </header>
 
     <Card class="glass space-y-4 p-3 sm:p-5">
-      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div v-if="isSummaryPending" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div
+          v-for="card in summarySkeletonCards"
+          :key="card"
+          class="stat-chip space-y-2"
+        >
+          <div class="skeleton h-3 w-20 rounded-full"></div>
+          <div class="skeleton h-6 w-16 rounded-lg sm:h-7 sm:w-20"></div>
+        </div>
+      </div>
+      <div v-else class="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div class="stat-chip">
           <p class="text-[11px] uppercase tracking-[0.04em] text-muted-foreground flex items-center gap-1">
             Calories Left
@@ -312,7 +306,17 @@ const canStartNewDay = computed(() => !!todayData.value && todayData.value.avail
 
       <Separator />
 
+      <div v-if="isSummaryPending" class="space-y-3">
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div v-for="row in summarySkeletonCards" :key="`macro-${row}`" class="space-y-2">
+            <div class="skeleton h-3 w-14 rounded-full"></div>
+            <div class="skeleton h-2.5 w-full rounded-full"></div>
+          </div>
+        </div>
+        <div class="skeleton h-24 w-full rounded-2xl"></div>
+      </div>
       <MacroProgressTable
+        v-else
         :targets="todayData?.targets ?? EXAMPLE_TARGETS"
         :eaten="todayData?.totals ?? { calories: 0, protein: 0, carbs: 0, fat: 0 }"
       />
@@ -335,12 +339,12 @@ const canStartNewDay = computed(() => !!todayData.value && todayData.value.avail
     </Card>
 
     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-      <Button :loading="todayQuery.isFetching.value" @click="openAddLog">Log Meal</Button>
+      <Button :loading="isOpeningAddLog" @click="openAddLog">Log Meal</Button>
       <div class="flex flex-col gap-1">
         <Button variant="outline" :loading="startNewDayMutation.isPending.value" :disabled="!canStartNewDay" @click="startNewDay">
           Start New Day
         </Button>
-        <p v-if="!canStartNewDay && !todayQuery.isPending.value" class="text-center text-xs text-muted-foreground">
+        <p v-if="!canStartNewDay && !isSummaryPending" class="text-center text-xs text-muted-foreground">
           Create a daily target in Settings first.
         </p>
       </div>
@@ -367,22 +371,46 @@ const canStartNewDay = computed(() => !!todayData.value && todayData.value.avail
       <div class="flex items-center justify-between gap-3">
         <h2 class="text-lg font-semibold">Today&apos;s Progress</h2>
         <span class="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-          {{ todayData?.entriesWithItems.length ?? 0 }} entries
+          {{ todayData?.entries.length ?? 0 }} entries
         </span>
       </div>
 
-      <div v-if="todayQuery.isPending.value" class="rounded-xl border border-dashed border-border/80 py-8 text-center text-sm text-muted-foreground">
-        Loading today data...
+      <div v-if="isSummaryPending || isEntriesPending" class="space-y-3">
+        <div
+          v-for="row in entrySkeletonRows"
+          :key="row"
+          class="rounded-2xl border border-border/70 bg-card/70 p-3 sm:p-5"
+        >
+          <div class="space-y-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="space-y-2">
+                <div class="skeleton h-4 w-28 rounded-full"></div>
+                <div class="skeleton h-3 w-20 rounded-full"></div>
+              </div>
+              <div class="skeleton h-6 w-14 rounded-full"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div v-for="metric in summarySkeletonCards" :key="`entry-${row}-metric-${metric}`" class="space-y-2">
+                <div class="skeleton h-3 w-12 rounded-full"></div>
+                <div class="skeleton h-3 w-16 rounded-full"></div>
+              </div>
+            </div>
+            <div class="skeleton h-8 w-24 rounded-xl"></div>
+          </div>
+        </div>
       </div>
+      <p v-else-if="entriesError" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        {{ entriesError.message }}
+      </p>
       <div
-        v-else-if="!todayData?.entriesWithItems.length"
+        v-else-if="!entriesWithItems.length"
         class="rounded-xl border border-dashed border-border/80 p-6 text-center text-sm text-muted-foreground"
       >
         <p>Nothing logged yet.</p>
         <p class="mt-1">Tap <strong>Log Meal</strong> above to add your first meal.</p>
       </div>
       <div v-else class="space-y-3">
-        <div v-for="entry in todayData?.entriesWithItems ?? []" :key="entry.entry.id" class="space-y-2">
+        <div v-for="entry in entriesWithItems" :key="entry.entry.id" class="space-y-2">
           <FoodEntryCard :entry-with-items="entry" :show-expand="true" />
           <Button
             variant="ghost"
@@ -416,5 +444,27 @@ const canStartNewDay = computed(() => !!todayData.value && todayData.value.avail
 .toast-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(8px);
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted) / 0.55) 0%,
+    hsl(var(--muted) / 0.82) 50%,
+    hsl(var(--muted) / 0.55) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 </style>

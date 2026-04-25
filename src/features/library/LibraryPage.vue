@@ -39,7 +39,6 @@ const deleteFoodMutation = useMutation({
   onSuccess: async () => {
     await Promise.all([
       localQueryClient.invalidateQueries({ queryKey: queryKeys.library }),
-      localQueryClient.invalidateQueries({ queryKey: queryKeys.today })
     ]);
   }
 });
@@ -72,7 +71,8 @@ const onSaveEdit = async (draft: SavedFoodDraft): Promise<void> => {
 const onMealSaved = async (): Promise<void> => {
   loggingMeal.value = null;
   await Promise.all([
-    queryClient.invalidateQueries({ queryKey: queryKeys.today }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.todaySummary }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.todayEntries }),
     queryClient.invalidateQueries({ queryKey: queryKeys.history }),
     queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext })
   ]);

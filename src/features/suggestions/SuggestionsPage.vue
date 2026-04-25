@@ -180,7 +180,7 @@ watch(
 const refreshContext = async (): Promise<void> => {
   await contextQuery.refetch();
   contextRefreshedAt.value = new Date();
-  await queryClient.invalidateQueries({ queryKey: queryKeys.today });
+  await queryClient.invalidateQueries({ queryKey: queryKeys.todaySummary });
 };
 </script>
 

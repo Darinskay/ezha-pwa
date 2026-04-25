@@ -591,7 +591,8 @@ const resolveDuplicate = async (choice: DuplicateSaveChoice): Promise<void> => {
 const finishAndExit = async (nextRouteName: "today" | "library"): Promise<void> => {
   await clearDraft(draftKey.value);
   await Promise.all([
-    queryClient.invalidateQueries({ queryKey: queryKeys.today }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.todaySummary }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.todayEntries }),
     queryClient.invalidateQueries({ queryKey: queryKeys.history }),
     queryClient.invalidateQueries({ queryKey: queryKeys.library }),
     queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext }),
