@@ -37,9 +37,7 @@ const deleteFoodMutation = useMutation({
     await savedFoodRepository.deleteFood(foodId);
   },
   onSuccess: async () => {
-    await Promise.all([
-      localQueryClient.invalidateQueries({ queryKey: queryKeys.library }),
-    ]);
+    await localQueryClient.invalidateQueries({ queryKey: queryKeys.library });
   },
 });
 

@@ -320,7 +320,7 @@ const confirmFoodSelection = async (): Promise<void> => {
     .filter((item): item is LogMealItem => !!item);
 
   const nextDraft: AddLogDraftSnapshot = {
-    ...(draft ?? {}),
+    ...draft,
     pendingLibrarySelectReturn: true,
     usedLibrarySource: selectedLogItems.length > 0,
     logItems: [...nonLibraryItems, ...selectedLogItems],
@@ -347,7 +347,7 @@ const confirmMealSelection = async (): Promise<void> => {
   );
 
   const nextDraft: AddLogDraftSnapshot = {
-    ...(draft ?? {}),
+    ...draft,
     pendingLibrarySelectReturn: true,
     usedLibrarySource: logItems.length > 0,
     logItems: [...nonLibraryItems, ...logItems],

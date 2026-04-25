@@ -108,6 +108,7 @@
 - Required environment values are accessed through `src/lib/env.ts`.
 - Do not hardcode secrets, Supabase keys, bucket names, or redirect URLs.
 - Assume the Supabase schema and edge functions are shared with the original EZHA app.
+- Do not start the dev server automatically; the user will run it manually when needed.
 - Avoid destructive changes to unrelated files.
 - The worktree may already contain user edits; do not revert them unless explicitly asked.
 
