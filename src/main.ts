@@ -21,8 +21,9 @@ const scheduleAfterInitialRender = (task: () => void): void => {
     window.setTimeout(task, 0);
   };
 
-  if ("requestIdleCallback" in window) {
-    window.requestIdleCallback(run, { timeout: 2_000 });
+  const requestIdleCallback = window.requestIdleCallback;
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(run, { timeout: 2_000 });
     return;
   }
 
