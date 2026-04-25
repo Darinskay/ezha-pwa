@@ -19,8 +19,12 @@ const emit = defineEmits<{
 }>();
 
 const name = ref(props.food?.name ?? "");
-const unitType = ref<"per_100g" | "per_serving">(props.food?.unit_type ?? "per_100g");
-const servingSizeText = ref(props.food?.serving_size ? formatMacro(props.food.serving_size, 1) : "");
+const unitType = ref<"per_100g" | "per_serving">(
+  props.food?.unit_type ?? "per_100g",
+);
+const servingSizeText = ref(
+  props.food?.serving_size ? formatMacro(props.food.serving_size, 1) : "",
+);
 const servingUnit = ref(props.food?.serving_unit ?? "serving");
 const caloriesText = ref(formatMacro(props.food?.calories_per_100g ?? 0, 2));
 const proteinText = ref(formatMacro(props.food?.protein_per_100g ?? 0, 2));
@@ -34,7 +38,14 @@ const perServingPreview = computed(() => {
   const carbs = parseNumberInput(carbsText.value);
   const fat = parseNumberInput(fatText.value);
   const servingSize = parseNumberInput(servingSizeText.value);
-  if (calories == null || protein == null || carbs == null || fat == null || servingSize == null || servingSize <= 0) {
+  if (
+    calories == null ||
+    protein == null ||
+    carbs == null ||
+    fat == null ||
+    servingSize == null ||
+    servingSize <= 0
+  ) {
     return null;
   }
   const multiplier = servingSize / 100;
@@ -42,7 +53,7 @@ const perServingPreview = computed(() => {
     calories: calories * multiplier,
     protein: protein * multiplier,
     carbs: carbs * multiplier,
-    fat: fat * multiplier
+    fat: fat * multiplier,
   };
 });
 
@@ -68,7 +79,10 @@ const save = (): void => {
     return;
   }
 
-  const servingSize = unitType.value === "per_serving" ? parseNumberInput(servingSizeText.value) : null;
+  const servingSize =
+    unitType.value === "per_serving"
+      ? parseNumberInput(servingSizeText.value)
+      : null;
 
   if (unitType.value === "per_serving" && (!servingSize || servingSize <= 0)) {
     errorMessage.value = "Please enter grams per serving.";
@@ -81,20 +95,23 @@ const save = (): void => {
           calories: calories * (servingSize / 100),
           protein: protein * (servingSize / 100),
           carbs: carbs * (servingSize / 100),
-          fat: fat * (servingSize / 100)
+          fat: fat * (servingSize / 100),
         }
       : {
           calories: 0,
           protein: 0,
           carbs: 0,
-          fat: 0
+          fat: 0,
         };
 
   emit("save", {
     name: trimmedName,
     unit_type: unitType.value,
     serving_size: unitType.value === "per_serving" ? servingSize : null,
-    serving_unit: unitType.value === "per_serving" ? servingUnit.value.trim() || null : null,
+    serving_unit:
+      unitType.value === "per_serving"
+        ? servingUnit.value.trim() || null
+        : null,
     calories_per_100g: calories,
     protein_per_100g: protein,
     carbs_per_100g: carbs,
@@ -102,58 +119,89 @@ const save = (): void => {
     calories_per_serving: perServing.calories,
     protein_per_serving: perServing.protein,
     carbs_per_serving: perServing.carbs,
-    fat_per_serving: perServing.fat
+    fat_per_serving: perServing.fat,
   });
 };
 </script>
 
 <template>
   <div class="dialog-overlay feature feature-library">
-    <Card class="w-full max-w-none rounded-t-[1.2rem] rounded-b-none space-y-4 border-border/80 bg-card/96 p-3 sm:max-w-xl sm:rounded-[1.4rem] sm:p-5">
+    <Card
+      class="w-full max-w-none rounded-t-[1.2rem] rounded-b-none space-y-4 border-border/80 bg-card/96 p-3 sm:max-w-xl sm:rounded-[1.4rem] sm:p-5"
+    >
       <div class="flex items-center justify-between">
-        <h3 class="text-lg font-semibold">{{ food ? "Edit Food" : "Add Food" }}</h3>
+        <h3 class="text-lg font-semibold">
+          {{ food ? "Edit Food" : "Add Food" }}
+        </h3>
         <Button variant="ghost" size="sm" @click="emit('close')">Close</Button>
       </div>
 
       <div class="space-y-2">
-        <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Food name</label>
+        <label
+          class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+          >Food name</label
+        >
         <Input v-model="name" placeholder="Food name" />
       </div>
 
       <div class="space-y-2">
-        <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Unit type</label>
+        <label
+          class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+          >Unit type</label
+        >
         <SelectField v-model="unitType">
           <option value="per_100g">Per 100g</option>
           <option value="per_serving">Per serving</option>
         </SelectField>
       </div>
 
-      <div v-if="unitType === 'per_serving'" class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div
+        v-if="unitType === 'per_serving'"
+        class="grid grid-cols-1 gap-2 sm:grid-cols-2"
+      >
         <div class="space-y-2">
-          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Serving grams</label>
+          <label
+            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+            >Serving grams</label
+          >
           <Input v-model="servingSizeText" type="number" min="0" step="0.1" />
         </div>
         <div class="space-y-2">
-          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Serving unit</label>
+          <label
+            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+            >Serving unit</label
+          >
           <Input v-model="servingUnit" placeholder="serving" />
         </div>
       </div>
 
       <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div class="space-y-1">
-          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Calories</label>
+          <label
+            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+            >Calories</label
+          >
           <Input v-model="caloriesText" type="number" min="0" step="0.1" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Protein</label>
+          <label
+            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+            >Protein</label
+          >
           <Input v-model="proteinText" type="number" min="0" step="0.1" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Carbs</label>
+          <label
+            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+            >Carbs</label
+          >
           <Input v-model="carbsText" type="number" min="0" step="0.1" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Fat</label>
+          <label
+            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+            >Fat</label
+          >
           <Input v-model="fatText" type="number" min="0" step="0.1" />
         </div>
       </div>
@@ -162,13 +210,18 @@ const save = (): void => {
         v-if="unitType === 'per_serving' && perServingPreview"
         class="rounded-xl border border-border/70 bg-muted/40 p-2 text-xs text-muted-foreground"
       >
-        Per serving: {{ formatMacro(perServingPreview.calories, 1) }} kcal ·
-        P{{ formatMacro(perServingPreview.protein, 1) }} ·
-        C{{ formatMacro(perServingPreview.carbs, 1) }} ·
-        F{{ formatMacro(perServingPreview.fat, 1) }}
+        Per serving: {{ formatMacro(perServingPreview.calories, 1) }} kcal · P{{
+          formatMacro(perServingPreview.protein, 1)
+        }}
+        · C{{ formatMacro(perServingPreview.carbs, 1) }} · F{{
+          formatMacro(perServingPreview.fat, 1)
+        }}
       </p>
 
-      <p v-if="errorMessage" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      <p
+        v-if="errorMessage"
+        class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+      >
         {{ errorMessage }}
       </p>
 

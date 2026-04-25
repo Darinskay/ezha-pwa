@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "lint": "oxlint .",
     "type-check": "npm run typecheck",
-    "format": "prettier --write package.json src/app/AppShell.vue src/components/FoodEntryCard.vue src/features/today/TodayPage.vue src/style.css",
+    "format": "prettier --write package.json src/app/AppShell.vue src/components/FoodEntryCard.vue src/features/library/FoodEditorDialog.vue src/features/library/LibraryPage.vue src/features/today/TodayPage.vue src/style.css",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
     "pwa:assets": "vite-pwa-assets-generator --preset minimal-2023 public/logo.svg"
