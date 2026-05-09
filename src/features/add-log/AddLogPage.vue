@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { TabsContent, TabsIndicator, TabsList, TabsRoot, TabsTrigger } from "radix-vue";
+import {
+  TabsContent,
+  TabsIndicator,
+  TabsList,
+  TabsRoot,
+  TabsTrigger,
+} from "radix-vue";
 import { Trash2 } from "lucide-vue-next";
 import { useQueryClient } from "@tanstack/vue-query";
 import { watchDebounced } from "@vueuse/core";
@@ -10,7 +16,12 @@ import Card from "@/components/ui/Card.vue";
 import Input from "@/components/ui/Input.vue";
 import SelectField from "@/components/ui/SelectField.vue";
 import Textarea from "@/components/ui/Textarea.vue";
-import { clearDraft, enqueueRetry, loadDraft, saveDraft } from "@/db/offline-db";
+import {
+  clearDraft,
+  enqueueRetry,
+  loadDraft,
+  saveDraft,
+} from "@/db/offline-db";
 import {
   buildManualLibraryDraft,
   buildPhotoLibraryDraft,
@@ -18,7 +29,7 @@ import {
   saveLibraryDraftWithDuplicateCheck,
   suggestedLibraryNameFromInputs,
   type DuplicateSaveChoice,
-  type PendingLibraryDuplicate
+  type PendingLibraryDuplicate,
 } from "@/features/add-log/library-save-service";
 import {
   applyEditedLabelMacrosToItem,
@@ -31,7 +42,7 @@ import {
   normalizeLogItemGrams,
   resolveLogMealAnalyzeInputType,
   totalsFromLogItems,
-  type LogMealItem
+  type LogMealItem,
 } from "@/features/add-log/log-meal-service";
 import { formatMacro } from "@/lib/macros";
 import { parseNumberInput } from "@/lib/number";
@@ -40,12 +51,14 @@ import { foodEntryRepository } from "@/repositories/food-entry-repository";
 import { savedFoodRepository } from "@/repositories/saved-food-repository";
 import { aiAnalysisService } from "@/services/ai-analysis-service";
 import { resolveActiveDateForLogging } from "@/services/active-date-service";
+import { syncDailySummaryForDate } from "@/services/day-summary-service";
 import { storageService } from "@/services/storage-service";
+import { useActiveDayStore } from "@/stores/active-day-store";
 import { currentUserId } from "@/lib/supabase";
 import type {
   AIItemInput,
   MacroEstimate,
-  SavedFoodDraft
+  SavedFoodDraft,
 } from "@/types/domain";
 
 interface DraftItem {
@@ -95,20 +108,68 @@ interface AddLogDraft {
   pendingLibrarySelectReturn?: boolean;
 }
 
+const props = withDefaults(
+  defineProps<{
+    embedded?: boolean;
+    initialMode?: "log" | "library";
+    date?: string;
+  }>(),
+  {
+    embedded: false,
+    initialMode: "log",
+  },
+);
+const emit = defineEmits<{
+  close: [];
+  saved: [nextRouteName: "today" | "library"];
+  "select-library": [];
+}>();
+
 const route = useRoute();
 const router = useRouter();
 const queryClient = useQueryClient();
+const activeDayStore = useActiveDayStore();
 
-const mode = computed<"log" | "library">(() => (route.query.mode === "library" ? "library" : "log"));
+const mode = computed<"log" | "library">(() =>
+  props.embedded
+    ? props.initialMode
+    : route.query.mode === "library"
+      ? "library"
+      : "log",
+);
+const activeLogDate = computed(() => {
+  if (props.date) return props.date;
+  const routeDate =
+    typeof route.query.date === "string" ? route.query.date : undefined;
+  return routeDate ?? activeDayStore.activeDate;
+});
+const pageClass = computed(() =>
+  props.embedded
+    ? "h-[90vh] w-full max-w-none overflow-y-auto rounded-t-[1.2rem] rounded-b-none border border-border/80 bg-card p-3 shadow-[0_-10px_34px_hsl(var(--glass-shadow)/0.28)] sm:max-w-2xl sm:rounded-[1.4rem] sm:p-5 space-y-3 sm:space-y-4"
+    : "app-page feature feature-add-log",
+);
+const pageTitle = computed(() =>
+  mode.value === "log" ? (props.embedded ? "Log Meal" : "Add Log") : "Add Food",
+);
+const closePage = async (): Promise<void> => {
+  if (props.embedded) {
+    emit("close");
+    return;
+  }
+  await router.back();
+};
+
 const draftKey = computed(() => `add-log:${mode.value}`);
 const LOG_MODE_DRAFT_KEY = "add-log:log";
 
-const selectedLogWays = ref<LogWay[]>([]);
+const selectedLogWays = ref<LogWay[]>(["text"]);
 const selectedPhotoPicker = ref<"camera" | "gallery" | null>(null);
 
 const entryMode = ref<"description" | "list">("description");
 const descriptionText = ref("");
-const items = ref<DraftItem[]>([{ id: crypto.randomUUID(), name: "", gramsText: "" }]);
+const items = ref<DraftItem[]>([
+  { id: crypto.randomUUID(), name: "", gramsText: "" },
+]);
 const logItems = ref<LogMealItem[]>([]);
 const lastValidGramsByItemId = ref<Record<string, string>>({});
 const lastValidLibraryFoodGramsByFoodId = ref<Record<string, string>>({});
@@ -157,9 +218,12 @@ const manualProteinText = ref("");
 const manualCarbsText = ref("");
 const manualFatText = ref("");
 
-const isLogWaySelected = (way: LogWay): boolean => selectedLogWays.value.includes(way);
+const isLogWaySelected = (way: LogWay): boolean =>
+  selectedLogWays.value.includes(way);
 const isTextWaySelected = computed(() => isLogWaySelected("text"));
-const isPhotoWaySelected = computed(() => isLogWaySelected("camera") || isLogWaySelected("gallery"));
+const isPhotoWaySelected = computed(
+  () => isLogWaySelected("camera") || isLogWaySelected("gallery"),
+);
 
 const manualPerServingPreview = computed(() => {
   const calories = parseNumberInput(manualCaloriesText.value);
@@ -184,7 +248,7 @@ const manualPerServingPreview = computed(() => {
     calories: calories * multiplier,
     protein: protein * multiplier,
     carbs: carbs * multiplier,
-    fat: fat * multiplier
+    fat: fat * multiplier,
   };
 });
 
@@ -193,7 +257,9 @@ const hasTextInput = computed(() => {
     return false;
   }
   if (entryMode.value === "list") {
-    return items.value.some((item) => item.name.trim() || item.gramsText.trim());
+    return items.value.some(
+      (item) => item.name.trim() || item.gramsText.trim(),
+    );
   }
   return !!descriptionText.value.trim();
 });
@@ -204,10 +270,15 @@ const hasPhotoInput = computed(() => {
   }
   return !!selectedImageFile.value || !!pendingImagePath.value;
 });
-const hasAnyLogItems = computed(() => buildMealIngredientsFromLogItems(logItems.value).length > 0);
+const hasAnyLogItems = computed(
+  () => buildMealIngredientsFromLogItems(logItems.value).length > 0,
+);
 const logTotals = computed(() => totalsFromLogItems(logItems.value));
 const labelEditableItem = computed(() =>
-  latestLabelItemId.value ? logItems.value.find((item) => item.id === latestLabelItemId.value) ?? null : null
+  latestLabelItemId.value
+    ? (logItems.value.find((item) => item.id === latestLabelItemId.value) ??
+      null)
+    : null,
 );
 
 const canAnalyze = computed(() => {
@@ -228,8 +299,8 @@ const suggestedLibraryName = computed(() =>
     selectedLibraryFoodName: null,
     listItemNames: logItems.value.map((item) => item.name),
     descriptionText: descriptionText.value,
-    aiFoodName: estimate.value?.foodName ?? null
-  })
+    aiFoodName: estimate.value?.foodName ?? null,
+  }),
 );
 
 const suggestedFoodName = (): string => {
@@ -292,7 +363,10 @@ const normalizeLogItemGramsText = (item: LogMealItem): void => {
     return;
   }
 
-  if (normalized >= MAX_LOG_ITEM_GRAMS && parseNumberInput(item.gramsText) != null) {
+  if (
+    normalized >= MAX_LOG_ITEM_GRAMS &&
+    parseNumberInput(item.gramsText) != null
+  ) {
     gramsValidationMessage.value = `Max grams per item is ${MAX_LOG_ITEM_GRAMS}g.`;
   }
   item.gramsText = formatMacro(normalized, 1);
@@ -319,7 +393,10 @@ const analysisInputType = computed(() => {
   if (mode.value === "library") {
     return isLabelPhoto.value ? "label_photo" : "photo";
   }
-  return resolveLogMealAnalyzeInputType(hasPhotoInput.value, isLabelPhoto.value);
+  return resolveLogMealAnalyzeInputType(
+    hasPhotoInput.value,
+    isLabelPhoto.value,
+  );
 });
 
 const clearImage = (): void => {
@@ -338,7 +415,9 @@ const clearImage = (): void => {
 
 const toggleLogWay = (way: LogWay): void => {
   if (selectedLogWays.value.includes(way)) {
-    selectedLogWays.value = selectedLogWays.value.filter((current) => current !== way);
+    selectedLogWays.value = selectedLogWays.value.filter(
+      (current) => current !== way,
+    );
     return;
   }
   selectedLogWays.value = [...selectedLogWays.value, way];
@@ -360,7 +439,12 @@ const setEstimate = (nextEstimate: MacroEstimate): void => {
   fatText.value = formatMacro(nextEstimate.fat, 2);
 };
 
-const setMacroTextFromTotals = (totals: { calories: number; protein: number; carbs: number; fat: number }): void => {
+const setMacroTextFromTotals = (totals: {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}): void => {
   caloriesText.value = formatMacro(totals.calories, 2);
   proteinText.value = formatMacro(totals.protein, 2);
   carbsText.value = formatMacro(totals.carbs, 2);
@@ -388,14 +472,16 @@ const applyLabelScaling = (): void => {
       calories: item.calories * multiplier,
       protein: item.protein * multiplier,
       carbs: item.carbs * multiplier,
-      fat: item.fat * multiplier
-    }))
+      fat: item.fat * multiplier,
+    })),
   };
 
   setEstimate(scaled);
 };
 
-const validateItemInputs = (requireAtLeastOne: boolean): AIItemInput[] | null => {
+const validateItemInputs = (
+  requireAtLeastOne: boolean,
+): AIItemInput[] | null => {
   if (entryMode.value !== "list") return [];
 
   const parsed: AIItemInput[] = [];
@@ -462,7 +548,11 @@ const uploadIfNeeded = async (): Promise<string | null> => {
   const entryId = pendingEntryId.value ?? crypto.randomUUID();
   pendingEntryId.value = entryId;
 
-  const path = await storageService.uploadFoodImage(selectedImageFile.value, userId, entryId);
+  const path = await storageService.uploadFoodImage(
+    selectedImageFile.value,
+    userId,
+    entryId,
+  );
   pendingImagePath.value = path;
   return path;
 };
@@ -472,9 +562,16 @@ const openLibrarySelector = async (): Promise<void> => {
   const draft = buildDraftSnapshot();
   await saveDraft(LOG_MODE_DRAFT_KEY, {
     ...draft,
-    pendingLibrarySelectReturn: true
+    pendingLibrarySelectReturn: true,
   } satisfies AddLogDraft);
-  await router.push({ name: "log-meal-library-select" });
+  if (props.embedded) {
+    emit("select-library");
+    return;
+  }
+  await router.push({
+    name: "log-meal-library-select",
+    query: { date: activeLogDate.value },
+  });
 };
 
 const analyze = async (): Promise<void> => {
@@ -495,7 +592,9 @@ const analyze = async (): Promise<void> => {
 
     const imagePath = isPhotoWaySelected.value ? await uploadIfNeeded() : null;
     const text =
-      mode.value === "log" && isTextWaySelected.value && entryMode.value === "description"
+      mode.value === "log" &&
+      isTextWaySelected.value &&
+      entryMode.value === "description"
         ? descriptionText.value.trim()
         : "";
 
@@ -503,7 +602,7 @@ const analyze = async (): Promise<void> => {
       text: text || undefined,
       items: itemInputs.length ? itemInputs : undefined,
       imagePath: imagePath ?? undefined,
-      inputType: analysisInputType.value
+      inputType: analysisInputType.value,
     });
 
     setEstimate(nextEstimate);
@@ -518,12 +617,19 @@ const analyze = async (): Promise<void> => {
     if (mode.value === "log") {
       if (isLabelPhoto.value) {
         const grams = parseMacro(labelGramsText.value);
-        const labelItems = buildLabelLogItemsFromEstimate(nextEstimate, grams, suggestedFoodName());
+        const labelItems = buildLabelLogItemsFromEstimate(
+          nextEstimate,
+          grams,
+          suggestedFoodName(),
+        );
         replaceAiLogItems(labelItems);
         latestLabelItemId.value = labelItems[0]?.id ?? null;
         syncLabelEditorFromItem();
       } else {
-        const aiItems = buildLogItemsFromEstimate(nextEstimate, suggestedFoodName());
+        const aiItems = buildLogItemsFromEstimate(
+          nextEstimate,
+          suggestedFoodName(),
+        );
         replaceAiLogItems(aiItems);
         setMacroTextFromTotals(logTotals.value);
         latestLabelItemId.value = null;
@@ -538,7 +644,8 @@ const analyze = async (): Promise<void> => {
       }
     }
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "Unable to analyze meal.";
+    errorMessage.value =
+      error instanceof Error ? error.message : "Unable to analyze meal.";
   } finally {
     isAnalyzing.value = false;
   }
@@ -552,7 +659,7 @@ const buildLibraryDraft = (name: string): SavedFoodDraft | null => {
     carbsPerDisplayUnit: parseMacro(carbsText.value),
     fatPerDisplayUnit: parseMacro(fatText.value),
     isLabelPhoto: isLabelPhoto.value,
-    labelGrams: parseMacro(labelGramsText.value)
+    labelGrams: parseMacro(labelGramsText.value),
   });
 
   if (!result.draft) {
@@ -564,7 +671,10 @@ const buildLibraryDraft = (name: string): SavedFoodDraft | null => {
 };
 
 const saveLibraryDraft = async (draft: SavedFoodDraft): Promise<boolean> => {
-  const result = await saveLibraryDraftWithDuplicateCheck(savedFoodRepository, draft);
+  const result = await saveLibraryDraftWithDuplicateCheck(
+    savedFoodRepository,
+    draft,
+  );
   if (result.status === "duplicate") {
     pendingDuplicate.value = { ...result.pending };
     return false;
@@ -588,16 +698,24 @@ const resolveDuplicate = async (choice: DuplicateSaveChoice): Promise<void> => {
   saveMessage.value = "Saved to library.";
 };
 
-const finishAndExit = async (nextRouteName: "today" | "library"): Promise<void> => {
+const finishAndExit = async (
+  nextRouteName: "today" | "library",
+): Promise<void> => {
   await clearDraft(draftKey.value);
+  activeDayStore.setActiveDate(activeLogDate.value);
   await Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.daySummary }),
     queryClient.invalidateQueries({ queryKey: queryKeys.todaySummary }),
     queryClient.invalidateQueries({ queryKey: queryKeys.todayEntries }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.history }),
     queryClient.invalidateQueries({ queryKey: queryKeys.library }),
     queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.settingsTargets })
+    queryClient.invalidateQueries({ queryKey: queryKeys.settingsTargets }),
   ]);
+
+  if (props.embedded) {
+    emit("saved", nextRouteName);
+    return;
+  }
 
   await router.replace({ name: nextRouteName });
 };
@@ -611,10 +729,13 @@ const saveLogEntry = async (): Promise<void> => {
   gramsValidationMessage.value = null;
 
   const blockedItems = logItems.value.filter(
-    (item) => item.isNutritionMissing && (normalizeLogItemGrams(item.gramsText) ?? 0) > 0
+    (item) =>
+      item.isNutritionMissing &&
+      (normalizeLogItemGrams(item.gramsText) ?? 0) > 0,
   );
   if (blockedItems.length > 0) {
-    errorMessage.value = "[PLACEHOLDER] Remove blocked items with missing nutrition before saving.";
+    errorMessage.value =
+      "[PLACEHOLDER] Remove blocked items with missing nutrition before saving.";
     return;
   }
 
@@ -636,11 +757,17 @@ const saveLogEntry = async (): Promise<void> => {
     const userId = await currentUserId();
     const entryId = pendingEntryId.value ?? crypto.randomUUID();
     pendingEntryId.value = entryId;
-    const imagePath = hasPhotoInput.value ? (await uploadIfNeeded()) ?? null : null;
-    const activeDate = await resolveActiveDateForLogging(userId);
+    const imagePath = hasPhotoInput.value
+      ? ((await uploadIfNeeded()) ?? null)
+      : null;
+    const activeDate = await resolveActiveDateForLogging(
+      userId,
+      activeLogDate.value,
+    );
 
     const hasLibraryItems = logItems.value.some(
-      (item) => item.origin === "library_food" || item.origin === "library_meal"
+      (item) =>
+        item.origin === "library_food" || item.origin === "library_meal",
     );
     const hasAiItems = logItems.value.some((item) => item.origin === "ai");
     const { entry, entryItems } = buildFoodEntryPayload({
@@ -651,10 +778,11 @@ const saveLogEntry = async (): Promise<void> => {
       items: logItems.value,
       sources: {
         usedPhoto: usedPhotoSource.value,
-        usedText: usedTextSource.value || (hasAiItems && !usedPhotoSource.value),
-        usedLibrary: hasLibraryItems
+        usedText:
+          usedTextSource.value || (hasAiItems && !usedPhotoSource.value),
+        usedLibrary: hasLibraryItems,
       },
-      isLabelPhoto: usedPhotoMode.value === "label_photo"
+      isLabelPhoto: usedPhotoMode.value === "label_photo",
     });
 
     if (entryItems.length === 0) {
@@ -662,12 +790,19 @@ const saveLogEntry = async (): Promise<void> => {
       return;
     }
 
+    let queuedForRetry = false;
     try {
       await foodEntryRepository.insertFoodEntry(entry, entryItems);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to save entry";
-      if (!navigator.onLine || message.toLowerCase().includes("network") || message.toLowerCase().includes("fetch")) {
+      const message =
+        error instanceof Error ? error.message : "Unable to save entry";
+      if (
+        !navigator.onLine ||
+        message.toLowerCase().includes("network") ||
+        message.toLowerCase().includes("fetch")
+      ) {
         await enqueueRetry("create_food_entry", { entry, items: entryItems });
+        queuedForRetry = true;
       } else {
         throw error;
       }
@@ -676,13 +811,17 @@ const saveLogEntry = async (): Promise<void> => {
     if (saveToLibrary.value) {
       await savedFoodRepository.insertMeal(
         libraryName.value.trim(),
-        buildMealIngredientsFromLogItems(logItems.value)
+        buildMealIngredientsFromLogItems(logItems.value),
       );
     }
 
+    if (!queuedForRetry) {
+      await syncDailySummaryForDate(activeDate);
+    }
     await finishAndExit("today");
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "Unable to save entry.";
+    errorMessage.value =
+      error instanceof Error ? error.message : "Unable to save entry.";
   } finally {
     isSaving.value = false;
   }
@@ -697,12 +836,15 @@ const saveManualLibrary = async (): Promise<void> => {
     const result = buildManualLibraryDraft({
       name: libraryName.value,
       unitType: manualUnitType.value,
-      servingSizeGrams: manualUnitType.value === "per_serving" ? parseMacro(manualServingSizeText.value) : null,
+      servingSizeGrams:
+        manualUnitType.value === "per_serving"
+          ? parseMacro(manualServingSizeText.value)
+          : null,
       servingUnit: manualServingUnit.value,
       caloriesPer100g: parseMacro(manualCaloriesText.value),
       proteinPer100g: parseMacro(manualProteinText.value),
       carbsPer100g: parseMacro(manualCarbsText.value),
-      fatPer100g: parseMacro(manualFatText.value)
+      fatPer100g: parseMacro(manualFatText.value),
     });
 
     if (!result.draft) {
@@ -719,7 +861,8 @@ const saveManualLibrary = async (): Promise<void> => {
 
     await finishAndExit("library");
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "Unable to save to library.";
+    errorMessage.value =
+      error instanceof Error ? error.message : "Unable to save to library.";
   } finally {
     isSaving.value = false;
   }
@@ -744,13 +887,17 @@ const saveLibraryFromEstimate = async (): Promise<void> => {
 
     await finishAndExit("library");
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "Unable to save to library.";
+    errorMessage.value =
+      error instanceof Error ? error.message : "Unable to save to library.";
   } finally {
     isSaving.value = false;
   }
 };
 
-const onFilePicked = (event: Event, source: "camera" | "gallery" | null = null): void => {
+const onFilePicked = (
+  event: Event,
+  source: "camera" | "gallery" | null = null,
+): void => {
   const target = event.target as HTMLInputElement;
   const file = target.files?.[0] ?? null;
   if (!file) return;
@@ -791,8 +938,12 @@ const applyLabelMacroEdits = (): void => {
   const grams = parseMacro(labelGramsText.value);
   logItems.value = logItems.value.map((item) =>
     item.id === labelEditableItem.value?.id
-      ? applyEditedLabelMacrosToItem(item, { calories, protein, carbs, fat }, grams)
-      : item
+      ? applyEditedLabelMacrosToItem(
+          item,
+          { calories, protein, carbs, fat },
+          grams,
+        )
+      : item,
   );
   errorMessage.value = null;
   syncLabelEditorFromItem();
@@ -807,7 +958,7 @@ const resetAddLogState = (): void => {
   pendingEntryId.value = null;
   pendingImagePath.value = null;
 
-  selectedLogWays.value = [];
+  selectedLogWays.value = ["text"];
   selectedPhotoPicker.value = null;
   entryMode.value = "description";
   descriptionText.value = "";
@@ -848,13 +999,19 @@ const applyDraftSnapshot = (draft: AddLogDraft): void => {
   selectedImageFile.value = draft.selectedImageFile ?? null;
   pendingEntryId.value = draft.pendingEntryId ?? null;
   pendingImagePath.value = draft.pendingImagePath ?? null;
-  imagePreviewUrl.value = selectedImageFile.value ? URL.createObjectURL(selectedImageFile.value) : null;
+  imagePreviewUrl.value = selectedImageFile.value
+    ? URL.createObjectURL(selectedImageFile.value)
+    : null;
 
-  selectedLogWays.value = draft.selectedLogWays ?? [];
+  selectedLogWays.value = draft.selectedLogWays?.length
+    ? draft.selectedLogWays
+    : ["text"];
   selectedPhotoPicker.value = draft.selectedPhotoPicker ?? null;
   entryMode.value = draft.entryMode;
   descriptionText.value = draft.descriptionText;
-  items.value = draft.items.length ? draft.items : [{ id: crypto.randomUUID(), name: "", gramsText: "" }];
+  items.value = draft.items.length
+    ? draft.items
+    : [{ id: crypto.randomUUID(), name: "", gramsText: "" }];
   logItems.value = draft.logItems ?? [];
   syncRememberedLogItemGrams();
   isLabelPhoto.value = draft.isLabelPhoto;
@@ -912,7 +1069,7 @@ const buildDraftSnapshot = (): AddLogDraft => ({
   manualFatText: manualFatText.value,
   selectedImageFile: selectedImageFile.value,
   pendingEntryId: pendingEntryId.value,
-  pendingImagePath: pendingImagePath.value
+  pendingImagePath: pendingImagePath.value,
 });
 
 const hydrateFromDraft = async (): Promise<void> => {
@@ -951,7 +1108,7 @@ watch(
   async () => {
     await hydrateFromDraft();
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 watchDebounced(
@@ -983,12 +1140,12 @@ watchDebounced(
     manualCaloriesText,
     manualProteinText,
     manualCarbsText,
-    manualFatText
+    manualFatText,
   ],
   () => {
     void persistDraft();
   },
-  { debounce: 400, maxWait: 1200, deep: true }
+  { debounce: 400, maxWait: 1200, deep: true },
 );
 
 watch(
@@ -997,7 +1154,7 @@ watch(
     errorMessage.value = null;
     saveMessage.value = null;
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 watch(
@@ -1006,7 +1163,7 @@ watch(
     if (hasUserEditedLibraryName.value) return;
     libraryName.value = nextSuggestedName ?? "";
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 watch(
@@ -1014,23 +1171,22 @@ watch(
   () => {
     syncRememberedLogItemGrams();
   },
-  { deep: true, immediate: true }
+  { deep: true, immediate: true },
 );
 
-watch(
-  [isLabelPhoto, labelGramsText],
-  () => {
-    applyLabelScaling();
-    if (!isLabelPhoto.value || !labelEditableItem.value) return;
-    const grams = parseMacro(labelGramsText.value);
-    if (!grams || grams <= 0) return;
+watch([isLabelPhoto, labelGramsText], () => {
+  applyLabelScaling();
+  if (!isLabelPhoto.value || !labelEditableItem.value) return;
+  const grams = parseMacro(labelGramsText.value);
+  if (!grams || grams <= 0) return;
 
-    logItems.value = logItems.value.map((item) =>
-      item.id === labelEditableItem.value?.id ? { ...item, gramsText: formatMacro(grams, 1) } : item
-    );
-    syncLabelEditorFromItem();
-  }
-);
+  logItems.value = logItems.value.map((item) =>
+    item.id === labelEditableItem.value?.id
+      ? { ...item, gramsText: formatMacro(grams, 1) }
+      : item,
+  );
+  syncLabelEditorFromItem();
+});
 
 watch(
   [mode, logTotals, latestLabelItemId],
@@ -1041,7 +1197,7 @@ watch(
     }
     setMacroTextFromTotals(logTotals.value);
   },
-  { immediate: true, deep: true }
+  { immediate: true, deep: true },
 );
 
 onUnmounted(() => {
@@ -1052,22 +1208,30 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="app-page feature feature-add-log">
+  <section :class="pageClass">
     <header class="flex items-start justify-between gap-3">
       <div class="page-header">
         <h1 class="page-title">
-          {{ mode === "log" ? "Add Log" : "Add Food" }}
+          {{ pageTitle }}
         </h1>
         <p class="page-subtitle">
-          {{ mode === "log" ? "Log with AI, photo, or saved library items." : "Save foods to your library." }}
+          {{
+            mode === "log"
+              ? "Log with AI, photo, or saved library items."
+              : "Save foods to your library."
+          }}
         </p>
       </div>
-      <Button variant="ghost" size="sm" @click="router.back()">Close</Button>
+      <Button variant="ghost" size="sm" @click="closePage">Close</Button>
     </header>
 
     <Card v-if="mode === 'log'" class="glass space-y-4 p-3 sm:p-5">
       <div class="space-y-2">
-        <p class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Choose how to log</p>
+        <p
+          class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+        >
+          Choose how to log
+        </p>
         <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Button
             size="sm"
@@ -1090,11 +1254,7 @@ onUnmounted(() => {
           >
             Text
           </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            @click="openLibrarySelector"
-          >
+          <Button size="sm" variant="secondary" @click="openLibrarySelector">
             Add from Library
           </Button>
         </div>
@@ -1104,30 +1264,36 @@ onUnmounted(() => {
     <Card v-if="mode === 'library'" class="space-y-4 p-3 sm:p-5">
       <TabsRoot v-model="libraryEntryMode">
         <TabsList class="ios-segment">
-          <TabsTrigger
-            value="photo"
-            class="ios-segment-trigger"
-          >
+          <TabsTrigger value="photo" class="ios-segment-trigger">
             Photo
           </TabsTrigger>
-          <TabsTrigger
-            value="manual"
-            class="ios-segment-trigger"
-          >
+          <TabsTrigger value="manual" class="ios-segment-trigger">
             Manual
           </TabsTrigger>
         </TabsList>
-        <TabsIndicator class="h-[2px] bg-[hsl(var(--feature-primary))] transition-all" />
+        <TabsIndicator
+          class="h-[2px] bg-[hsl(var(--feature-primary))] transition-all"
+        />
 
         <TabsContent value="manual" class="mt-4 space-y-3">
           <div class="space-y-1">
-            <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Food name</label>
-            <Input :model-value="libraryName" placeholder="e.g. Apple" @update:modelValue="onLibraryNameInput" />
+            <label
+              class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+              >Food name</label
+            >
+            <Input
+              :model-value="libraryName"
+              placeholder="e.g. Apple"
+              @update:modelValue="onLibraryNameInput"
+            />
           </div>
 
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div class="space-y-1">
-              <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Unit type</label>
+              <label
+                class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                >Unit type</label
+              >
               <SelectField v-model="manualUnitType">
                 <option value="per_100g">Per 100g</option>
                 <option value="per_serving">Per serving</option>
@@ -1136,11 +1302,22 @@ onUnmounted(() => {
 
             <template v-if="manualUnitType === 'per_serving'">
               <div class="space-y-1">
-                <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Serving grams</label>
-                <Input v-model="manualServingSizeText" type="number" min="0" step="0.1" />
+                <label
+                  class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                  >Serving grams</label
+                >
+                <Input
+                  v-model="manualServingSizeText"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                />
               </div>
               <div class="space-y-1">
-                <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Serving unit</label>
+                <label
+                  class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                  >Serving unit</label
+                >
                 <Input v-model="manualServingUnit" />
               </div>
             </template>
@@ -1148,19 +1325,46 @@ onUnmounted(() => {
 
           <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <div class="space-y-1">
-              <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Calories</label>
-              <Input v-model="manualCaloriesText" type="number" min="0" step="0.1" />
+              <label
+                class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                >Calories</label
+              >
+              <Input
+                v-model="manualCaloriesText"
+                type="number"
+                min="0"
+                step="0.1"
+              />
             </div>
             <div class="space-y-1">
-              <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Protein</label>
-              <Input v-model="manualProteinText" type="number" min="0" step="0.1" />
+              <label
+                class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                >Protein</label
+              >
+              <Input
+                v-model="manualProteinText"
+                type="number"
+                min="0"
+                step="0.1"
+              />
             </div>
             <div class="space-y-1">
-              <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Carbs</label>
-              <Input v-model="manualCarbsText" type="number" min="0" step="0.1" />
+              <label
+                class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                >Carbs</label
+              >
+              <Input
+                v-model="manualCarbsText"
+                type="number"
+                min="0"
+                step="0.1"
+              />
             </div>
             <div class="space-y-1">
-              <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Fat</label>
+              <label
+                class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                >Fat</label
+              >
               <Input v-model="manualFatText" type="number" min="0" step="0.1" />
             </div>
           </div>
@@ -1169,30 +1373,39 @@ onUnmounted(() => {
             v-if="manualPerServingPreview && manualUnitType === 'per_serving'"
             class="rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
           >
-            Per serving: {{ formatMacro(manualPerServingPreview.calories, 1) }} kcal ·
-            P{{ formatMacro(manualPerServingPreview.protein, 1) }} ·
-            C{{ formatMacro(manualPerServingPreview.carbs, 1) }} ·
-            F{{ formatMacro(manualPerServingPreview.fat, 1) }}
+            Per serving:
+            {{ formatMacro(manualPerServingPreview.calories, 1) }} kcal · P{{
+              formatMacro(manualPerServingPreview.protein, 1)
+            }}
+            · C{{ formatMacro(manualPerServingPreview.carbs, 1) }} · F{{
+              formatMacro(manualPerServingPreview.fat, 1)
+            }}
           </p>
 
-          <Button class="w-full sm:w-auto" :loading="isSaving" @click="saveManualLibrary">Save to Library</Button>
+          <Button
+            class="w-full sm:w-auto"
+            :loading="isSaving"
+            @click="saveManualLibrary"
+            >Save to Library</Button
+          >
         </TabsContent>
       </TabsRoot>
     </Card>
 
-    <Card v-if="mode === 'log' ? isTextWaySelected || isPhotoWaySelected : libraryEntryMode === 'photo'" class="space-y-4 p-3 sm:p-5">
+    <Card
+      v-if="
+        mode === 'log'
+          ? isTextWaySelected || isPhotoWaySelected
+          : libraryEntryMode === 'photo'
+      "
+      class="space-y-4 p-3 sm:p-5"
+    >
       <TabsRoot v-if="mode === 'log' && isTextWaySelected" v-model="entryMode">
         <TabsList class="ios-segment">
-          <TabsTrigger
-            value="description"
-            class="ios-segment-trigger"
-          >
+          <TabsTrigger value="description" class="ios-segment-trigger">
             Description
           </TabsTrigger>
-          <TabsTrigger
-            value="list"
-            class="ios-segment-trigger"
-          >
+          <TabsTrigger value="list" class="ios-segment-trigger">
             List
           </TabsTrigger>
         </TabsList>
@@ -1206,17 +1419,42 @@ onUnmounted(() => {
         </TabsContent>
 
         <TabsContent value="list" class="mt-4 space-y-2">
-          <article v-for="item in items" :key="item.id" class="grid grid-cols-12 gap-2 rounded-xl border border-border/70 bg-background/80 p-2">
-            <Input v-model="item.name" class="col-span-7" placeholder="Food name" />
-            <Input v-model="item.gramsText" class="col-span-4" type="number" min="0" step="0.1" placeholder="Grams (g)" />
-            <Button variant="ghost" class="col-span-1 px-0" @click="removeItemRow(item.id)">×</Button>
+          <article
+            v-for="item in items"
+            :key="item.id"
+            class="grid grid-cols-12 gap-2 rounded-xl border border-border/70 bg-background/80 p-2"
+          >
+            <Input
+              v-model="item.name"
+              class="col-span-7"
+              placeholder="Food name"
+            />
+            <Input
+              v-model="item.gramsText"
+              class="col-span-4"
+              type="number"
+              min="0"
+              step="0.1"
+              placeholder="Grams (g)"
+            />
+            <Button
+              variant="ghost"
+              class="col-span-1 px-0"
+              @click="removeItemRow(item.id)"
+              >×</Button
+            >
           </article>
-          <Button size="sm" variant="secondary" @click="addItemRow">Add item</Button>
+          <Button size="sm" variant="secondary" @click="addItemRow"
+            >Add item</Button
+          >
         </TabsContent>
       </TabsRoot>
 
       <div v-if="mode === 'library' || isPhotoWaySelected" class="space-y-2">
-        <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Photo (optional)</label>
+        <label
+          class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+          >Photo (optional)</label
+        >
         <template v-if="mode === 'log'">
           <div class="flex flex-wrap gap-2">
             <Button
@@ -1252,7 +1490,8 @@ onUnmounted(() => {
             @change="(event) => onFilePicked(event, 'gallery')"
           />
           <p v-if="selectedPhotoPicker" class="text-xs text-muted-foreground">
-            Selected source: {{ selectedPhotoPicker === "camera" ? "Camera" : "Gallery" }}
+            Selected source:
+            {{ selectedPhotoPicker === "camera" ? "Camera" : "Gallery" }}
           </p>
         </template>
         <input
@@ -1269,9 +1508,22 @@ onUnmounted(() => {
           class="max-h-56 w-full rounded-xl border border-border/80 object-cover"
         />
         <div class="flex flex-wrap items-center gap-2">
-          <Button v-if="imagePreviewUrl" size="sm" variant="ghost" @click="clearImage">Remove photo</Button>
-          <label v-if="imagePreviewUrl" class="inline-flex items-center gap-2 text-sm text-muted-foreground">
-            <input v-model="isLabelPhoto" type="checkbox" class="size-4 rounded border-border accent-primary" />
+          <Button
+            v-if="imagePreviewUrl"
+            size="sm"
+            variant="ghost"
+            @click="clearImage"
+            >Remove photo</Button
+          >
+          <label
+            v-if="imagePreviewUrl"
+            class="inline-flex items-center gap-2 text-sm text-muted-foreground"
+          >
+            <input
+              v-model="isLabelPhoto"
+              type="checkbox"
+              class="size-4 rounded border-border accent-primary"
+            />
             This is a nutrition label
           </label>
         </div>
@@ -1297,22 +1549,40 @@ onUnmounted(() => {
       </Button>
     </Card>
 
-    <Card v-if="mode === 'library' ? !!estimate : logItems.length > 0" class="space-y-4 p-3 sm:p-5">
-      <div v-if="mode === 'library'" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <Card
+      v-if="mode === 'library' ? !!estimate : logItems.length > 0"
+      class="space-y-4 p-3 sm:p-5"
+    >
+      <div
+        v-if="mode === 'library'"
+        class="grid grid-cols-2 gap-2 sm:grid-cols-4"
+      >
         <div class="space-y-1">
-          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Calories</label>
+          <label
+            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+            >Calories</label
+          >
           <Input v-model="caloriesText" type="number" min="0" step="0.1" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Protein</label>
+          <label
+            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+            >Protein</label
+          >
           <Input v-model="proteinText" type="number" min="0" step="0.1" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Carbs</label>
+          <label
+            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+            >Carbs</label
+          >
           <Input v-model="carbsText" type="number" min="0" step="0.1" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Fat</label>
+          <label
+            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+            >Fat</label
+          >
           <Input v-model="fatText" type="number" min="0" step="0.1" />
         </div>
       </div>
@@ -1337,9 +1607,17 @@ onUnmounted(() => {
           </div>
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div class="space-y-1">
-              <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Grams (g)</label>
+              <label
+                class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                >Grams (g)</label
+              >
               <div class="flex items-center gap-2">
-                <Button variant="secondary" size="sm" @click="adjustLogItemGrams(item, -5)">-</Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  @click="adjustLogItemGrams(item, -5)"
+                  >-</Button
+                >
                 <Input
                   v-model="item.gramsText"
                   type="number"
@@ -1349,46 +1627,97 @@ onUnmounted(() => {
                   placeholder="Grams (g)"
                   @blur="normalizeLogItemGramsText(item)"
                 />
-                <Button variant="secondary" size="sm" @click="adjustLogItemGrams(item, 5)">+</Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  @click="adjustLogItemGrams(item, 5)"
+                  >+</Button
+                >
               </div>
             </div>
-            <p class="rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              {{ formatMacro(macrosFromLogItem(item).calories, 1) }} kcal ·
-              P{{ formatMacro(macrosFromLogItem(item).protein, 1) }} ·
-              C{{ formatMacro(macrosFromLogItem(item).carbs, 1) }} ·
-              F{{ formatMacro(macrosFromLogItem(item).fat, 1) }}
+            <p
+              class="rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+            >
+              {{ formatMacro(macrosFromLogItem(item).calories, 1) }} kcal · P{{
+                formatMacro(macrosFromLogItem(item).protein, 1)
+              }}
+              · C{{ formatMacro(macrosFromLogItem(item).carbs, 1) }} · F{{
+                formatMacro(macrosFromLogItem(item).fat, 1)
+              }}
             </p>
           </div>
-          <p v-if="item.isNutritionMissing" class="rounded-xl border border-amber-300/40 bg-amber-100/40 px-3 py-2 text-xs text-amber-700">
-            [PLACEHOLDER] Missing nutrition fields for this template item. It is blocked from save.
+          <p
+            v-if="item.isNutritionMissing"
+            class="rounded-xl border border-amber-300/40 bg-amber-100/40 px-3 py-2 text-xs text-amber-700"
+          >
+            [PLACEHOLDER] Missing nutrition fields for this template item. It is
+            blocked from save.
           </p>
         </article>
 
         <div class="rounded-xl border border-border/70 bg-muted/40 p-3 text-sm">
-          Total: {{ formatMacro(logTotals.calories, 1) }} kcal ·
-          P{{ formatMacro(logTotals.protein, 1) }}g ·
-          C{{ formatMacro(logTotals.carbs, 1) }}g ·
-          F{{ formatMacro(logTotals.fat, 1) }}g
+          Total: {{ formatMacro(logTotals.calories, 1) }} kcal · P{{
+            formatMacro(logTotals.protein, 1)
+          }}g · C{{ formatMacro(logTotals.carbs, 1) }}g · F{{
+            formatMacro(logTotals.fat, 1)
+          }}g
         </div>
 
         <div v-if="labelEditableItem" class="space-y-2">
-          <p class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Label macro overrides</p>
+          <p
+            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+          >
+            Label macro overrides
+          </p>
           <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Input v-model="caloriesText" type="number" min="0" step="0.1" placeholder="Calories" />
-            <Input v-model="proteinText" type="number" min="0" step="0.1" placeholder="Protein" />
-            <Input v-model="carbsText" type="number" min="0" step="0.1" placeholder="Carbs" />
-            <Input v-model="fatText" type="number" min="0" step="0.1" placeholder="Fat" />
+            <Input
+              v-model="caloriesText"
+              type="number"
+              min="0"
+              step="0.1"
+              placeholder="Calories"
+            />
+            <Input
+              v-model="proteinText"
+              type="number"
+              min="0"
+              step="0.1"
+              placeholder="Protein"
+            />
+            <Input
+              v-model="carbsText"
+              type="number"
+              min="0"
+              step="0.1"
+              placeholder="Carbs"
+            />
+            <Input
+              v-model="fatText"
+              type="number"
+              min="0"
+              step="0.1"
+              placeholder="Fat"
+            />
           </div>
-          <Button size="sm" variant="secondary" @click="applyLabelMacroEdits">Apply label macros</Button>
+          <Button size="sm" variant="secondary" @click="applyLabelMacroEdits"
+            >Apply label macros</Button
+          >
         </div>
 
-        <p v-if="gramsValidationMessage" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p
+          v-if="gramsValidationMessage"
+          class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
           {{ gramsValidationMessage }}
         </p>
 
         <div class="space-y-2">
           <label class="inline-flex items-center gap-2 text-sm">
-            <input v-model="saveToLibrary" type="checkbox" class="size-4 rounded border-border accent-primary" />
+            <input
+              v-model="saveToLibrary"
+              type="checkbox"
+              class="size-4 rounded border-border accent-primary"
+            />
             Save as meal to Library after logging
           </label>
           <Input
@@ -1399,31 +1728,63 @@ onUnmounted(() => {
           />
         </div>
 
-        <div class="sticky bottom-2 grid grid-cols-1 gap-2 rounded-2xl border border-border/70 bg-card/95 p-3 backdrop-blur sm:grid-cols-2">
+        <div
+          class="sticky bottom-2 grid grid-cols-1 gap-2 rounded-2xl border border-border/70 bg-card/95 p-3 backdrop-blur sm:grid-cols-2"
+        >
           <Button variant="ghost" @click="clearMealDraft">Cancel</Button>
-          <Button :loading="isSaving" :disabled="!canSaveLog" @click="saveLogEntry">Save meal</Button>
+          <Button
+            :loading="isSaving"
+            :disabled="!canSaveLog"
+            @click="saveLogEntry"
+            >Save meal</Button
+          >
         </div>
       </template>
 
       <div v-if="mode === 'library'" class="space-y-2">
-        <Input :model-value="libraryName" placeholder="Food name for library" @update:modelValue="onLibraryNameInput" />
-        <Button class="w-full sm:w-auto" :loading="isSaving" @click="saveLibraryFromEstimate">Save to Library</Button>
+        <Input
+          :model-value="libraryName"
+          placeholder="Food name for library"
+          @update:modelValue="onLibraryNameInput"
+        />
+        <Button
+          class="w-full sm:w-auto"
+          :loading="isSaving"
+          @click="saveLibraryFromEstimate"
+          >Save to Library</Button
+        >
       </div>
     </Card>
 
-    <p v-if="errorMessage" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">{{ errorMessage }}</p>
-    <p v-if="saveMessage" class="rounded-xl border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary">{{ saveMessage }}</p>
+    <p
+      v-if="errorMessage"
+      class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+    >
+      {{ errorMessage }}
+    </p>
+    <p
+      v-if="saveMessage"
+      class="rounded-xl border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary"
+    >
+      {{ saveMessage }}
+    </p>
 
     <div v-if="pendingDuplicate" class="dialog-overlay feature feature-add-log">
-      <Card class="w-full max-w-none rounded-t-[1.2rem] rounded-b-none space-y-4 border-border/80 bg-card/96 p-3 sm:max-w-md sm:rounded-[1.4rem] sm:p-5">
+      <Card
+        class="w-full max-w-none rounded-t-[1.2rem] rounded-b-none space-y-4 border-border/80 bg-card/96 p-3 sm:max-w-md sm:rounded-[1.4rem] sm:p-5"
+      >
         <h3 class="text-lg font-semibold">Food already exists</h3>
         <p class="text-sm text-muted-foreground">
           "{{ pendingDuplicate.existing.name }}" is already in your Library.
         </p>
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <Button @click="resolveDuplicate('update')">Update existing</Button>
-          <Button variant="secondary" @click="resolveDuplicate('create')">Create new</Button>
-          <Button variant="ghost" @click="pendingDuplicate = null">Cancel</Button>
+          <Button variant="secondary" @click="resolveDuplicate('create')"
+            >Create new</Button
+          >
+          <Button variant="ghost" @click="pendingDuplicate = null"
+            >Cancel</Button
+          >
         </div>
       </Card>
     </div>

@@ -6,6 +6,7 @@ import App from "@/App.vue";
 import router from "@/router";
 import { queryClient } from "@/query/query-client";
 import { retryQueueService } from "@/services/retry-queue-service";
+import { syncDailySummaryForDate } from "@/services/day-summary-service";
 import { foodEntryRepository } from "@/repositories/food-entry-repository";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { FoodEntry, FoodEntryItem } from "@/types/domain";
@@ -14,6 +15,7 @@ import "@/style.css";
 retryQueueService.register("create_food_entry", async (payload) => {
   const typed = payload as { entry: FoodEntry; items: FoodEntryItem[] };
   await foodEntryRepository.insertFoodEntry(typed.entry, typed.items);
+  await syncDailySummaryForDate(typed.entry.date);
 });
 
 const scheduleAfterInitialRender = (task: () => void): void => {
@@ -49,6 +51,6 @@ scheduleAfterInitialRender(() => {
       window.setInterval(() => {
         void registration.update();
       }, 30 * 60_000);
-    }
+    },
   });
 });

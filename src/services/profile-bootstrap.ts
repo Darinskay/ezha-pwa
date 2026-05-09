@@ -1,4 +1,5 @@
 import { nowDateKey } from "@/lib/date";
+import { clampSelectableDate } from "@/lib/day-navigation";
 import { currentUserId } from "@/lib/supabase";
 import { EXAMPLE_TARGETS, toMacroTotals } from "@/lib/macros";
 import { dailySummaryRepository } from "@/repositories/daily-summary-repository";
@@ -16,10 +17,13 @@ export const defaultProfileForUser = (userId: string): Profile => ({
   active_date: nowDateKey(),
   active_target_id: null,
   created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString()
+  updated_at: new Date().toISOString(),
 });
 
-export const ensureProfileAndTargets = async (): Promise<{ profile: Profile; targets: DailyTarget[] }> => {
+export const ensureProfileAndTargets = async (): Promise<{
+  profile: Profile;
+  targets: DailyTarget[];
+}> => {
   const userId = await currentUserId();
   const fallbackProfile = defaultProfileForUser(userId);
   await profileRepository.ensureProfileRowExists(fallbackProfile, userId);
@@ -35,10 +39,12 @@ export const ensureProfileAndTargets = async (): Promise<{ profile: Profile; tar
 
 export const resolveActiveTarget = async (
   profile: Profile,
-  targets: DailyTarget[]
+  targets: DailyTarget[],
 ): Promise<DailyTarget | undefined> => {
   if (profile.active_target_id) {
-    const match = targets.find((target) => target.id === profile.active_target_id);
+    const match = targets.find(
+      (target) => target.id === profile.active_target_id,
+    );
     if (match) {
       return match;
     }
@@ -59,10 +65,14 @@ export interface TodayBootstrap {
   totals: MacroTargets;
   availableTargets: DailyTarget[];
   activeTarget?: DailyTarget;
-  entries: Awaited<ReturnType<typeof foodEntryRepository.fetchEntriesByDateKey>>;
+  entries: Awaited<
+    ReturnType<typeof foodEntryRepository.fetchEntriesByDateKey>
+  >;
 }
 
-export const fetchTodayBootstrap = async (): Promise<TodayBootstrap> => {
+export const fetchDayBootstrap = async (
+  dateKey = nowDateKey(),
+): Promise<TodayBootstrap> => {
   const userId = await currentUserId();
   const fallbackProfile = defaultProfileForUser(userId);
   await profileRepository.ensureProfileRowExists(fallbackProfile, userId);
@@ -74,9 +84,10 @@ export const fetchTodayBootstrap = async (): Promise<TodayBootstrap> => {
 
   const targets = await dailyTargetRepository.ensureTargets(profile, userId);
   const activeTarget = await resolveActiveTarget(profile, targets);
+  const selectedDate = clampSelectableDate(dateKey, nowDateKey());
   const [summary, entries] = await Promise.all([
-    dailySummaryRepository.fetchSummary(profile.active_date),
-    foodEntryRepository.fetchEntriesByDateKey(profile.active_date)
+    dailySummaryRepository.fetchSummary(selectedDate),
+    foodEntryRepository.fetchEntriesByDateKey(selectedDate),
   ]);
 
   const resolvedTargets: MacroTargets = summary
@@ -84,23 +95,26 @@ export const fetchTodayBootstrap = async (): Promise<TodayBootstrap> => {
         calories: Math.round(summary.calories_target),
         protein: Math.round(summary.protein_target),
         carbs: Math.round(summary.carbs_target),
-        fat: Math.round(summary.fat_target)
+        fat: Math.round(summary.fat_target),
       }
     : activeTarget
       ? {
           calories: Math.round(activeTarget.calories_target),
           protein: Math.round(activeTarget.protein_target),
           carbs: Math.round(activeTarget.carbs_target),
-          fat: Math.round(activeTarget.fat_target)
+          fat: Math.round(activeTarget.fat_target),
         }
       : EXAMPLE_TARGETS;
 
   return {
-    activeDate: profile.active_date,
+    activeDate: selectedDate,
     targets: resolvedTargets,
     totals: toMacroTotals(entries),
     availableTargets: targets,
     activeTarget,
-    entries
+    entries,
   };
 };
+
+export const fetchTodayBootstrap = async (): Promise<TodayBootstrap> =>
+  fetchDayBootstrap();

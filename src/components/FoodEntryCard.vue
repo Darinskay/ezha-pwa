@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import Badge from "@/components/ui/Badge.vue";
+import { ChevronDown, Trash2 } from "lucide-vue-next";
 import Button from "@/components/ui/Button.vue";
 import type { FoodEntryWithItems } from "@/types/domain";
 
@@ -15,6 +15,10 @@ const emit = defineEmits<{
 }>();
 
 const expanded = ref(false);
+
+const title = computed(
+  () => props.entryWithItems.entry.input_text?.trim() || "Meal",
+);
 
 const sourceLabel = computed(() => {
   const source = props.entryWithItems.entry.ai_source;
@@ -44,20 +48,33 @@ const createdLabel = computed(() => {
   }).format(new Date(value));
 });
 
-const showActions = computed(
-  () =>
-    props.showDelete ||
-    (props.showExpand && props.entryWithItems.items.length > 0),
+const descriptionLabel = computed(() =>
+  [
+    createdLabel.value,
+    `${Math.round(props.entryWithItems.entry.calories)} kcal`,
+    `P ${Math.round(props.entryWithItems.entry.protein)}g`,
+    `C ${Math.round(props.entryWithItems.entry.carbs)}g`,
+    `F ${Math.round(props.entryWithItems.entry.fat)}g`,
+    sourceLabel.value,
+    confidenceLabel.value,
+  ]
+    .filter(Boolean)
+    .join(" · "),
 );
 
 const handleDelete = (): void => {
   emit("delete", props.entryWithItems.entry.id);
 };
+
+const toggleExpanded = (): void => {
+  if (!props.showExpand || props.entryWithItems.items.length === 0) return;
+  expanded.value = !expanded.value;
+};
 </script>
 
 <template>
   <article
-    class="space-y-3 rounded-[1.1rem] border p-3 sm:rounded-[1.25rem] sm:p-4"
+    class="rounded-[1.05rem] border p-2.5 sm:rounded-[1.15rem] sm:p-3"
     style="
       border-color: hsl(var(--feature-primary) / 0.2);
       background: linear-gradient(
@@ -67,70 +84,56 @@ const handleDelete = (): void => {
       );
     "
   >
-    <div class="flex items-start justify-between gap-4">
-      <div>
-        <h4 class="text-base font-semibold">
-          {{ entryWithItems.entry.input_text?.trim() || "Meal" }}
-        </h4>
-        <p class="text-xs text-muted-foreground">{{ createdLabel }}</p>
-      </div>
-      <div class="text-right">
-        <p class="text-lg font-semibold leading-none sm:text-xl">
-          {{ Math.round(entryWithItems.entry.calories) }}
-        </p>
-        <p class="text-xs text-muted-foreground">kcal</p>
-      </div>
-    </div>
-
-    <div class="flex flex-wrap items-center gap-2">
-      <Badge variant="outline"
-        >P {{ Math.round(entryWithItems.entry.protein) }}g</Badge
-      >
-      <Badge variant="outline"
-        >C {{ Math.round(entryWithItems.entry.carbs) }}g</Badge
-      >
-      <Badge variant="outline"
-        >F {{ Math.round(entryWithItems.entry.fat) }}g</Badge
-      >
-      <Badge v-if="confidenceLabel" variant="secondary">{{
-        confidenceLabel
-      }}</Badge>
-      <Badge variant="secondary">{{ sourceLabel }}</Badge>
-    </div>
-
-    <div
-      v-if="showActions"
-      class="flex flex-wrap items-center justify-between gap-2 border-t pt-3"
-      style="border-color: hsl(var(--feature-primary) / 0.12)"
-    >
+    <div class="flex min-h-12 items-center gap-3">
       <button
         v-if="showExpand && entryWithItems.items.length > 0"
-        class="inline-flex rounded-full border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/70"
-        style="
-          border-color: hsl(var(--feature-primary) / 0.24);
-          background: hsl(var(--feature-soft) / 0.5);
-        "
-        @click="expanded = !expanded"
+        class="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 py-1.5 text-left transition-colors hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        type="button"
+        :aria-expanded="expanded"
+        :aria-label="`${expanded ? 'Hide' : 'Show'} details for ${title}`"
+        @click="toggleExpanded"
       >
-        {{ expanded ? "Hide details" : "Show details" }}
+        <span class="min-w-0 flex-1">
+          <h4 class="truncate text-sm font-semibold leading-5 sm:text-[15px]">
+            {{ title }}
+          </h4>
+          <p class="truncate text-xs leading-4 text-muted-foreground">
+            {{ descriptionLabel }}
+          </p>
+        </span>
+        <ChevronDown
+          class="size-4 shrink-0 text-muted-foreground transition-transform duration-200"
+          :class="{ 'rotate-180': expanded }"
+          aria-hidden="true"
+        />
       </button>
-      <div v-else class="h-8"></div>
+
+      <div v-else class="min-w-0 flex-1 px-1.5 py-1.5">
+        <h4 class="truncate text-sm font-semibold leading-5 sm:text-[15px]">
+          {{ title }}
+        </h4>
+        <p class="truncate text-xs leading-4 text-muted-foreground">
+          {{ descriptionLabel }}
+        </p>
+      </div>
 
       <Button
         v-if="showDelete"
         variant="ghost"
         size="sm"
-        class="rounded-full px-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
+        class="size-9 rounded-full p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
         :loading="deleteLoading"
-        @click="handleDelete"
+        :aria-label="`Delete ${title}`"
+        @click.stop="handleDelete"
       >
-        Delete
+        <Trash2 v-if="!deleteLoading" class="size-4" />
       </Button>
     </div>
 
     <ul
       v-if="expanded && entryWithItems.items.length > 0"
-      class="space-y-2 pt-1"
+      class="mt-2 space-y-2 border-t pt-2"
+      style="border-color: hsl(var(--feature-primary) / 0.12)"
     >
       <li
         v-for="item in entryWithItems.items"

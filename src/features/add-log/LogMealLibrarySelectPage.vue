@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useQuery } from "@tanstack/vue-query";
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
@@ -43,7 +43,20 @@ const LIBRARY_FAVORITES_KEY = "ezha:library-food-favorites";
 const LIBRARY_RECENTS_KEY = "ezha:library-food-recents";
 const MAX_RECENT_FOODS = 16;
 
+const props = withDefaults(
+  defineProps<{
+    embedded?: boolean;
+  }>(),
+  {
+    embedded: false,
+  },
+);
+const emit = defineEmits<{
+  done: [];
+}>();
+
 const router = useRouter();
+const route = useRoute();
 
 // --- Foods tab state ---
 const searchText = ref("");
@@ -291,7 +304,18 @@ const pushRecentFoodIds = (foodIds: string[]): void => {
 };
 
 const returnToAddLog = async (): Promise<void> => {
-  await router.replace({ name: "add-log" });
+  if (props.embedded) {
+    emit("done");
+    return;
+  }
+
+  await router.replace({
+    name: "add-log",
+    query:
+      typeof route.query.date === "string"
+        ? { mode: "log", date: route.query.date }
+        : { mode: "log" },
+  });
 };
 
 // --- Confirm: foods ---
@@ -360,10 +384,21 @@ const confirmMealSelection = async (): Promise<void> => {
 favoriteFoodIds.value = readIdArrayFromStorage(LIBRARY_FAVORITES_KEY);
 recentFoodIds.value = readIdArrayFromStorage(LIBRARY_RECENTS_KEY);
 void preselectFromDraft();
+
+const selectorClass = computed(() =>
+  props.embedded
+    ? "h-[90vh] w-full max-w-none overflow-y-auto rounded-t-[1.2rem] rounded-b-none border border-border/80 bg-card p-3 shadow-[0_-10px_34px_hsl(var(--glass-shadow)/0.28)] sm:max-w-2xl sm:rounded-[1.4rem] sm:p-5 space-y-3 sm:space-y-4"
+    : "app-page feature feature-add-log pb-28",
+);
+const selectorActionBarClass = computed(() =>
+  props.embedded
+    ? "sticky bottom-0 z-20 rounded-2xl border border-border/70 bg-card/95 p-3 backdrop-blur"
+    : "fixed inset-x-0 bottom-0 z-20 border-t border-border/70 bg-card/95 px-4 py-3 backdrop-blur sm:left-auto sm:right-auto sm:w-full sm:max-w-screen-sm sm:rounded-t-2xl",
+);
 </script>
 
 <template>
-  <section class="app-page feature feature-add-log pb-28">
+  <section :class="selectorClass">
     <header class="page-header">
       <h1 class="page-title">Select from Library</h1>
       <p class="page-subtitle">
@@ -655,9 +690,7 @@ void preselectFromDraft();
     </section>
 
     <!-- Fixed bottom bar -->
-    <div
-      class="fixed inset-x-0 bottom-0 z-20 border-t border-border/70 bg-card/95 px-4 py-3 backdrop-blur sm:left-auto sm:right-auto sm:w-full sm:max-w-screen-sm sm:rounded-t-2xl"
-    >
+    <div :class="selectorActionBarClass">
       <div class="mx-auto grid max-w-screen-sm grid-cols-2 gap-2">
         <Button variant="ghost" @click="returnToAddLog">Cancel</Button>
         <Button
