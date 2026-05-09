@@ -7,11 +7,11 @@ import { ChevronRight, Trash2, X } from "lucide-vue-next";
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import Input from "@/components/ui/Input.vue";
+import { invalidateDailyDataQueries } from "@/query/invalidation";
 import { queryKeys } from "@/query/keys";
 import { savedFoodRepository } from "@/repositories/saved-food-repository";
 import FoodEditorDialog from "@/features/library/FoodEditorDialog.vue";
 import MealQuickLogDialog from "@/features/meal/MealQuickLogDialog.vue";
-import { queryClient } from "@/query/query-client";
 import type { SavedFood, SavedFoodDraft } from "@/types/domain";
 
 const router = useRouter();
@@ -108,12 +108,7 @@ const onSaveEdit = async (draft: SavedFoodDraft): Promise<void> => {
 
 const onMealSaved = async (): Promise<void> => {
   loggingMeal.value = null;
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: queryKeys.daySummary }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.todaySummary }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.todayEntries }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext }),
-  ]);
+  await invalidateDailyDataQueries(localQueryClient);
 };
 
 const clearSearch = (): void => {

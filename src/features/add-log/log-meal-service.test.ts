@@ -15,9 +15,13 @@ import {
   resolveLogMealAnalyzeInputType,
   scalePer100gMacros,
   totalsFromLogItems,
-  type LogMealItem
+  type LogMealItem,
 } from "@/features/add-log/log-meal-service";
-import type { MacroEstimate, SavedFood, SavedMealIngredient } from "@/types/domain";
+import type {
+  MacroEstimate,
+  SavedFood,
+  SavedMealIngredient,
+} from "@/types/domain";
 
 const sampleFood = (overrides: Partial<SavedFood> = {}): SavedFood => ({
   id: "1d4621d0-d302-49b4-a8f4-6285ff89f8ff",
@@ -37,10 +41,12 @@ const sampleFood = (overrides: Partial<SavedFood> = {}): SavedFood => ({
   is_meal: false,
   created_at: null,
   updated_at: null,
-  ...overrides
+  ...overrides,
 });
 
-const sampleEstimate = (overrides: Partial<MacroEstimate> = {}): MacroEstimate => ({
+const sampleEstimate = (
+  overrides: Partial<MacroEstimate> = {},
+): MacroEstimate => ({
   calories: 520,
   protein: 30,
   carbs: 56,
@@ -57,7 +63,7 @@ const sampleEstimate = (overrides: Partial<MacroEstimate> = {}): MacroEstimate =
       protein: 46.5,
       carbs: 0,
       fat: 5.4,
-      confidence: 0.9
+      confidence: 0.9,
     },
     {
       name: "Rice",
@@ -66,10 +72,10 @@ const sampleEstimate = (overrides: Partial<MacroEstimate> = {}): MacroEstimate =
       protein: 3.5,
       carbs: 56,
       fat: 14.6,
-      confidence: 0.86
-    }
+      confidence: 0.86,
+    },
   ],
-  ...overrides
+  ...overrides,
 });
 
 describe("log-meal-service", () => {
@@ -81,7 +87,7 @@ describe("log-meal-service", () => {
       calories: 165,
       protein: 31,
       carbs: 0,
-      fat: 3.6
+      fat: 3.6,
     });
   });
 
@@ -93,7 +99,7 @@ describe("log-meal-service", () => {
     const entryItems = buildEntryItemsFromLogItems(
       "b3a8ef08-b00d-4aa4-ab64-a62367d334f0",
       "5f6f806e-f6ba-4a8a-8d4f-7d4339f0120f",
-      aiItems
+      aiItems,
     );
     expect(entryItems).toHaveLength(2);
     expect(entryItems[0].name).toBe("Chicken");
@@ -111,7 +117,7 @@ describe("log-meal-service", () => {
             protein: 6.3,
             carbs: 0.4,
             fat: 5.3,
-            confidence: 0.92
+            confidence: 0.92,
           },
           {
             name: "egg",
@@ -120,10 +126,10 @@ describe("log-meal-service", () => {
             protein: 12.6,
             carbs: 0.8,
             fat: 10.6,
-            confidence: 0.88
-          }
-        ]
-      })
+            confidence: 0.88,
+          },
+        ],
+      }),
     );
 
     expect(aiItems).toHaveLength(2);
@@ -146,29 +152,54 @@ describe("log-meal-service", () => {
   });
 
   it("resolves source metadata for each log source and mixed source", () => {
-    expect(resolveFoodEntryInput({ usedPhoto: false, usedText: true, usedLibrary: false }, false)).toEqual({
+    expect(
+      resolveFoodEntryInput(
+        { usedPhoto: false, usedText: true, usedLibrary: false },
+        false,
+      ),
+    ).toEqual({
       input_type: "text",
-      ai_source: "text"
+      ai_source: "text",
     });
 
-    expect(resolveFoodEntryInput({ usedPhoto: true, usedText: false, usedLibrary: false }, false)).toEqual({
+    expect(
+      resolveFoodEntryInput(
+        { usedPhoto: true, usedText: false, usedLibrary: false },
+        false,
+      ),
+    ).toEqual({
       input_type: "photo",
-      ai_source: "food_photo"
+      ai_source: "food_photo",
     });
 
-    expect(resolveFoodEntryInput({ usedPhoto: true, usedText: false, usedLibrary: false }, true)).toEqual({
+    expect(
+      resolveFoodEntryInput(
+        { usedPhoto: true, usedText: false, usedLibrary: false },
+        true,
+      ),
+    ).toEqual({
       input_type: "photo",
-      ai_source: "label_photo"
+      ai_source: "label_photo",
     });
 
-    expect(resolveFoodEntryInput({ usedPhoto: false, usedText: false, usedLibrary: true }, false)).toEqual({
+    expect(
+      resolveFoodEntryInput(
+        { usedPhoto: false, usedText: false, usedLibrary: true },
+        false,
+      ),
+    ).toEqual({
       input_type: "text",
-      ai_source: "library"
+      ai_source: "library",
     });
 
-    expect(resolveFoodEntryInput({ usedPhoto: true, usedText: true, usedLibrary: true }, false)).toEqual({
+    expect(
+      resolveFoodEntryInput(
+        { usedPhoto: true, usedText: true, usedLibrary: true },
+        false,
+      ),
+    ).toEqual({
       input_type: "photo+text",
-      ai_source: "food_photo"
+      ai_source: "food_photo",
     });
   });
 
@@ -187,7 +218,7 @@ describe("log-meal-service", () => {
       imagePath: "food_images/u/e.jpg",
       items,
       sources: { usedPhoto: true, usedText: false, usedLibrary: false },
-      isLabelPhoto: false
+      isLabelPhoto: false,
     });
 
     expect(entry.input_type).toBe("photo");
@@ -206,7 +237,7 @@ describe("log-meal-service", () => {
       imagePath: null,
       items,
       sources: { usedPhoto: false, usedText: true, usedLibrary: false },
-      isLabelPhoto: false
+      isLabelPhoto: false,
     });
 
     expect(entry.input_type).toBe("text");
@@ -225,7 +256,7 @@ describe("log-meal-service", () => {
       imagePath: null,
       items,
       sources: { usedPhoto: false, usedText: false, usedLibrary: true },
-      isLabelPhoto: false
+      isLabelPhoto: false,
     });
 
     expect(entry.input_type).toBe("text");
@@ -236,7 +267,10 @@ describe("log-meal-service", () => {
 
   it("builds a mixed-source payload with photo+text metadata", () => {
     const libraryItem = buildLogItemFromSavedFood(sampleFood());
-    const aiItem = buildLogItemsFromEstimate(sampleEstimate({ items: [] }), "Soup")[0];
+    const aiItem = buildLogItemsFromEstimate(
+      sampleEstimate({ items: [] }),
+      "Soup",
+    )[0];
     const { entry, entryItems } = buildFoodEntryPayload({
       entryId: "0f507d57-70cc-4f66-8f20-648a3f80ef38",
       userId: "49dc19ef-2a84-404f-9251-c8f51400f7f8",
@@ -244,7 +278,7 @@ describe("log-meal-service", () => {
       imagePath: "food_images/u/e.jpg",
       items: [libraryItem, aiItem],
       sources: { usedPhoto: true, usedText: true, usedLibrary: true },
-      isLabelPhoto: true
+      isLabelPhoto: true,
     });
 
     expect(entry.input_type).toBe("photo+text");
@@ -271,7 +305,7 @@ describe("log-meal-service", () => {
       origin: "ai",
       linkedFoodId: null,
       aiConfidence: null,
-      aiNotes: ""
+      aiNotes: "",
     };
 
     const editedDisplay = { calories: 210, protein: 14, carbs: 30, fat: 7 };
@@ -296,7 +330,7 @@ describe("log-meal-service", () => {
         carbs: 51,
         fat: 1.3,
         linked_food_id: null,
-        created_at: null
+        created_at: null,
       },
       {
         id: "e8ee82b6-f6b5-4d7f-a344-9cf671f1f6d2",
@@ -309,8 +343,8 @@ describe("log-meal-service", () => {
         carbs: 10,
         fat: 4,
         linked_food_id: "f3816bc4-f07e-4dc9-8f8d-7426d6eb0f98",
-        created_at: null
-      }
+        created_at: null,
+      },
     ];
 
     const mealItems = buildLogItemsFromSavedMeal(ingredients);
@@ -328,12 +362,14 @@ describe("log-meal-service", () => {
 
     expect(normalizeLogItemGrams(item.gramsText)).toBe(MAX_LOG_ITEM_GRAMS);
     const macros = macrosFromLogItem(item);
-    expect(macros.calories).toBeCloseTo((sampleFood().calories_per_100g * MAX_LOG_ITEM_GRAMS) / 100);
+    expect(macros.calories).toBeCloseTo(
+      (sampleFood().calories_per_100g * MAX_LOG_ITEM_GRAMS) / 100,
+    );
 
     const rows = buildEntryItemsFromLogItems(
       "3af7f8ad-7575-42cf-8bb2-259e622ec6dc",
       "b29b4a00-b14d-420f-96c4-8f9ca30f4de6",
-      [item]
+      [item],
     );
     expect(rows[0].grams).toBe(MAX_LOG_ITEM_GRAMS);
   });
@@ -351,24 +387,32 @@ describe("log-meal-service", () => {
         carbs: 0,
         fat: 0,
         linked_food_id: null,
-        created_at: null
-      }
+        created_at: null,
+      },
     ]);
 
     expect(mealItems[0].isNutritionMissing).toBe(true);
-    expect(macrosFromLogItem(mealItems[0])).toEqual({ calories: 0, protein: 0, carbs: 0, fat: 0 });
+    expect(macrosFromLogItem(mealItems[0])).toEqual({
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+    });
     expect(
       buildEntryItemsFromLogItems(
         "470f9722-9e8c-4cb9-b8f4-5f71ca4ee0a7",
         "37d2a332-0df4-4b8b-96bf-dcc52b3abb4a",
-        mealItems
-      )
+        mealItems,
+      ),
     ).toHaveLength(0);
   });
 
   it("builds saved meal ingredient drafts from current log items", () => {
     const libraryItem = buildLogItemFromSavedFood(sampleFood(), 120);
-    const aiItem = buildLogItemsFromEstimate(sampleEstimate({ items: [] }), "Soup")[0];
+    const aiItem = buildLogItemsFromEstimate(
+      sampleEstimate({ items: [] }),
+      "Soup",
+    )[0];
     aiItem.gramsText = "80";
 
     const ingredients = buildMealIngredientsFromLogItems([libraryItem, aiItem]);
@@ -383,9 +427,9 @@ describe("log-meal-service", () => {
         calories: acc.calories + ingredient.calories,
         protein: acc.protein + ingredient.protein,
         carbs: acc.carbs + ingredient.carbs,
-        fat: acc.fat + ingredient.fat
+        fat: acc.fat + ingredient.fat,
       }),
-      { calories: 0, protein: 0, carbs: 0, fat: 0 }
+      { calories: 0, protein: 0, carbs: 0, fat: 0 },
     );
 
     expect(draftTotals.calories).toBeCloseTo(totals.calories);
@@ -395,7 +439,10 @@ describe("log-meal-service", () => {
   });
 
   it("builds save-to-library meal ingredients from log items with linked food ids", () => {
-    const linkedFood = sampleFood({ id: "3294f966-b200-4f1f-83f1-c5be066fe785", name: "Greek Yogurt" });
+    const linkedFood = sampleFood({
+      id: "3294f966-b200-4f1f-83f1-c5be066fe785",
+      name: "Greek Yogurt",
+    });
     const libraryFoodItem = buildLogItemFromSavedFood(linkedFood, 140);
     const savedMealItems = buildLogItemsFromSavedMeal([
       {
@@ -409,16 +456,25 @@ describe("log-meal-service", () => {
         carbs: 31,
         fat: 10,
         linked_food_id: "d2b6f4b5-9c26-4509-b7c7-3f1a74f4ea53",
-        created_at: null
-      }
+        created_at: null,
+      },
     ]);
-    const aiItem = buildLogItemsFromEstimate(sampleEstimate({ items: [] }), "Berries")[0];
+    const aiItem = buildLogItemsFromEstimate(
+      sampleEstimate({ items: [] }),
+      "Berries",
+    )[0];
     aiItem.gramsText = "80";
 
-    const ingredients = buildMealIngredientsFromLogItems([libraryFoodItem, savedMealItems[0], aiItem]);
+    const ingredients = buildMealIngredientsFromLogItems([
+      libraryFoodItem,
+      savedMealItems[0],
+      aiItem,
+    ]);
     expect(ingredients).toHaveLength(3);
     expect(ingredients[0].linked_food_id).toBe(linkedFood.id);
-    expect(ingredients[1].linked_food_id).toBe("d2b6f4b5-9c26-4509-b7c7-3f1a74f4ea53");
+    expect(ingredients[1].linked_food_id).toBe(
+      "d2b6f4b5-9c26-4509-b7c7-3f1a74f4ea53",
+    );
     expect(ingredients[2].linked_food_id).toBeNull();
   });
 
@@ -426,8 +482,13 @@ describe("log-meal-service", () => {
     const entryItems = buildEntryItemsFromLogItems(
       "b3a8ef08-b00d-4aa4-ab64-a62367d334f0",
       "5f6f806e-f6ba-4a8a-8d4f-7d4339f0120f",
-      [buildLogItemFromSavedFood(sampleFood()), buildLogItemsFromEstimate(sampleEstimate({ items: [] }))[0]]
+      [
+        buildLogItemFromSavedFood(sampleFood()),
+        buildLogItemsFromEstimate(sampleEstimate({ items: [] }))[0],
+      ],
     );
-    expect(buildLogInputText(entryItems)).toBe("Chicken Breast, Chicken rice bowl");
+    expect(buildLogInputText(entryItems)).toBe(
+      "Chicken Breast, Chicken rice bowl",
+    );
   });
 });

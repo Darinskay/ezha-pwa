@@ -8,8 +8,8 @@ export const supabase = createClient(env.supabaseUrl, env.supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    flowType: "pkce"
-  }
+    flowType: "pkce",
+  },
 });
 
 export const currentSession = async (): Promise<Session> => {
@@ -18,8 +18,11 @@ export const currentSession = async (): Promise<Session> => {
     throw new Error(error?.message ?? "No active session");
   }
 
-  const expiresAt = data.session.expires_at ? data.session.expires_at * 1000 : 0;
-  const isExpiringSoon = expiresAt > 0 && expiresAt - Date.now() < refreshBufferSeconds * 1000;
+  const expiresAt = data.session.expires_at
+    ? data.session.expires_at * 1000
+    : 0;
+  const isExpiringSoon =
+    expiresAt > 0 && expiresAt - Date.now() < refreshBufferSeconds * 1000;
 
   if (isExpiringSoon) {
     const refreshed = await supabase.auth.refreshSession();

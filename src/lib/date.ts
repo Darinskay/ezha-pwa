@@ -20,18 +20,30 @@ export const addDays = (date: Date, days: number): Date => {
   return next;
 };
 
-export const maxDate = (a: Date, b: Date): Date => (a.getTime() >= b.getTime() ? a : b);
+export const maxDate = (a: Date, b: Date): Date =>
+  a.getTime() >= b.getTime() ? a : b;
 
-export const displayDate = (dateKey: string, locale = navigator.language): string => {
+export const displayDate = (
+  dateKey: string,
+  locale = navigator.language,
+): string => {
   const parsed = parseDateKey(dateKey);
   if (!parsed) return dateKey;
-  return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(parsed);
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(
+    parsed,
+  );
 };
 
-export const displayShortDay = (dateKey: string, locale = navigator.language): string => {
+export const displayShortDay = (
+  dateKey: string,
+  locale = navigator.language,
+): string => {
   const parsed = parseDateKey(dateKey);
   if (!parsed) return dateKey;
-  return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" }).format(parsed);
+  return new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+  }).format(parsed);
 };
 
 export const nowDateKey = (): string => toDateKey(new Date());

@@ -9,7 +9,7 @@ const router = createRouter({
       path: "/auth",
       name: "auth",
       component: () => import("@/features/auth/AuthPage.vue"),
-      meta: { guestOnly: true }
+      meta: { guestOnly: true },
     },
     {
       path: "/",
@@ -18,45 +18,46 @@ const router = createRouter({
       children: [
         {
           path: "",
-          redirect: { name: "today" }
+          redirect: { name: "today" },
         },
         {
           path: "today",
           name: "today",
           component: () => import("@/features/today/TodayPage.vue"),
-          meta: { tab: "today" }
+          meta: { tab: "today" },
         },
         {
           path: "suggestions",
           name: "suggestions",
           component: () => import("@/features/suggestions/SuggestionsPage.vue"),
-          meta: { tab: "suggestions" }
+          meta: { tab: "suggestions" },
         },
         {
           path: "library",
           name: "library",
           component: () => import("@/features/library/LibraryPage.vue"),
-          meta: { tab: "library" }
+          meta: { tab: "library" },
         },
         {
           path: "settings",
           name: "settings",
           component: () => import("@/features/settings/SettingsPage.vue"),
-          meta: { tab: "settings" }
+          meta: { tab: "settings" },
         },
         {
           path: "log/new",
           name: "add-log",
-          component: () => import("@/features/add-log/AddLogPage.vue")
+          component: () => import("@/features/add-log/AddLogPage.vue"),
         },
         {
           path: "log-meal/library-select",
           name: "log-meal-library-select",
-          component: () => import("@/features/add-log/LogMealLibrarySelectPage.vue")
-        }
-      ]
-    }
-  ]
+          component: () =>
+            import("@/features/add-log/LogMealLibrarySelectPage.vue"),
+        },
+      ],
+    },
+  ],
 });
 
 router.beforeEach(async (to) => {

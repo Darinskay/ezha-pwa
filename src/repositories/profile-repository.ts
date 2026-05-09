@@ -1,11 +1,15 @@
 import { nowDateKey } from "@/lib/date";
-import { ensureNoError, getUserId, supabaseClient } from "@/repositories/repository-utils";
+import {
+  ensureNoError,
+  getUserId,
+  supabaseClient,
+} from "@/repositories/repository-utils";
 import type { Profile } from "@/types/domain";
 import { parseWithSchema, profileSchema } from "@/types/schemas";
 
 export const profileRepository = {
   async fetchProfile(userId?: string): Promise<Profile | null> {
-    const resolvedUserId = userId ?? await getUserId();
+    const resolvedUserId = userId ?? (await getUserId());
     const { data, error } = await supabaseClient
       .from("profiles")
       .select("*")
@@ -17,15 +21,25 @@ export const profileRepository = {
     return parseWithSchema(profileSchema, data, "profile");
   },
 
-  async ensureProfileRowExists(defaultTargets: Profile, userId?: string): Promise<void> {
+  async ensureProfileRowExists(
+    defaultTargets: Profile,
+    userId?: string,
+  ): Promise<void> {
     const existing = await this.fetchProfile(userId ?? defaultTargets.user_id);
     if (existing) return;
 
-    const { error } = await supabaseClient.from("profiles").insert(defaultTargets);
+    const { error } = await supabaseClient
+      .from("profiles")
+      .insert(defaultTargets);
     ensureNoError(error);
   },
 
-  async upsertProfileTargets(calories: number, protein: number, carbs: number, fat: number): Promise<void> {
+  async upsertProfileTargets(
+    calories: number,
+    protein: number,
+    carbs: number,
+    fat: number,
+  ): Promise<void> {
     const userId = await getUserId();
     const existingProfile = await this.fetchProfile();
 
@@ -38,10 +52,12 @@ export const profileRepository = {
       active_date: existingProfile?.active_date ?? nowDateKey(),
       active_target_id: existingProfile?.active_target_id ?? null,
       created_at: existingProfile?.created_at ?? new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabaseClient.from("profiles").upsert(payload, { onConflict: "user_id" });
+    const { error } = await supabaseClient
+      .from("profiles")
+      .upsert(payload, { onConflict: "user_id" });
     ensureNoError(error);
   },
 
@@ -78,5 +94,5 @@ export const profileRepository = {
       throw new Error("Profile active date missing");
     }
     return data.active_date;
-  }
+  },
 };

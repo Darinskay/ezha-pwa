@@ -11,8 +11,8 @@ withDefaults(
   {
     modelValue: "",
     rows: 4,
-    placeholder: ""
-  }
+    placeholder: "",
+  },
 );
 
 const emit = defineEmits<{
@@ -33,12 +33,16 @@ const onInput = (event: Event): void => {
       cn(
         'flex min-h-[88px] w-full rounded-xl border px-3 py-2 text-[14px] transition-all duration-200 sm:min-h-[108px] sm:rounded-2xl sm:px-3.5 sm:py-2.5 sm:text-sm',
         'placeholder:text-muted-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-        $props.class
+        $props.class,
       )
     "
     style="
       border-color: hsl(var(--input));
-      background: linear-gradient(162deg, hsl(var(--card) / 0.86), hsl(var(--card) / 0.7));
+      background: linear-gradient(
+        162deg,
+        hsl(var(--card) / 0.86),
+        hsl(var(--card) / 0.7)
+      );
       box-shadow: inset 0 1px 0 hsl(var(--glass-highlight) / 0.52);
     "
     @input="onInput"

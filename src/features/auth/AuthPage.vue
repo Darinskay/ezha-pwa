@@ -37,10 +37,16 @@ const continueWithGoogle = async (): Promise<void> => {
 </script>
 
 <template>
-  <div class="app-root feature feature-auth flex min-h-screen items-center justify-center px-3 py-8 sm:px-4 sm:py-12">
+  <div
+    class="app-root feature feature-auth flex min-h-screen items-center justify-center px-3 py-8 sm:px-4 sm:py-12"
+  >
     <Card class="w-full max-w-md p-4 sm:p-6">
       <div class="space-y-2 text-center">
-        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Nutrition Assistant</p>
+        <p
+          class="text-xs font-semibold uppercase tracking-[0.22em] text-primary"
+        >
+          Nutrition Assistant
+        </p>
         <h1 class="text-3xl font-semibold tracking-tight">EZHA</h1>
         <p class="text-sm text-muted-foreground">
           Smarter meal logging with AI estimates you can edit.
@@ -76,7 +82,10 @@ const continueWithGoogle = async (): Promise<void> => {
         <Input v-model="email" type="email" placeholder="Email" />
         <Input v-model="password" type="password" placeholder="Password" />
 
-        <p v-if="authStore.errorMessage" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p
+          v-if="authStore.errorMessage"
+          class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
           {{ authStore.errorMessage }}
         </p>
 

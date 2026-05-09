@@ -51,11 +51,15 @@ export interface SuggestedLibraryNameInput {
 }
 
 const isMacroTupleValid = (
-  values: [number | null, number | null, number | null, number | null]
+  values: [number | null, number | null, number | null, number | null],
 ): values is [number, number, number, number] =>
   values.every((value) => value != null && Number.isFinite(value));
 
-const toPer100gFromDisplayValue = (value: number, isLabelPhoto: boolean, labelGrams: number | null): number => {
+const toPer100gFromDisplayValue = (
+  value: number,
+  isLabelPhoto: boolean,
+  labelGrams: number | null,
+): number => {
   if (!isLabelPhoto || !labelGrams || labelGrams <= 0) {
     return value;
   }
@@ -66,27 +70,42 @@ const zeroPerServingMacros = {
   calories_per_serving: 0,
   protein_per_serving: 0,
   carbs_per_serving: 0,
-  fat_per_serving: 0
+  fat_per_serving: 0,
 };
 
-export const buildPhotoLibraryDraft = (input: PhotoLibraryDraftInput): LibraryDraftBuildResult => {
+export const buildPhotoLibraryDraft = (
+  input: PhotoLibraryDraftInput,
+): LibraryDraftBuildResult => {
   const trimmedName = input.name.trim();
   if (!trimmedName) {
-    return { draft: null, error: "Please enter a food name to save to Library." };
+    return {
+      draft: null,
+      error: "Please enter a food name to save to Library.",
+    };
   }
 
-  const macroTuple: [number | null, number | null, number | null, number | null] = [
+  const macroTuple: [
+    number | null,
+    number | null,
+    number | null,
+    number | null,
+  ] = [
     input.caloriesPerDisplayUnit,
     input.proteinPerDisplayUnit,
     input.carbsPerDisplayUnit,
-    input.fatPerDisplayUnit
+    input.fatPerDisplayUnit,
   ];
 
   if (!isMacroTupleValid(macroTuple)) {
     return { draft: null, error: "Please enter valid macro values." };
   }
 
-  const [caloriesPerDisplayUnit, proteinPerDisplayUnit, carbsPerDisplayUnit, fatPerDisplayUnit] = macroTuple;
+  const [
+    caloriesPerDisplayUnit,
+    proteinPerDisplayUnit,
+    carbsPerDisplayUnit,
+    fatPerDisplayUnit,
+  ] = macroTuple;
 
   return {
     error: null,
@@ -95,46 +114,79 @@ export const buildPhotoLibraryDraft = (input: PhotoLibraryDraftInput): LibraryDr
       unit_type: "per_100g",
       serving_size: null,
       serving_unit: null,
-      calories_per_100g: toPer100gFromDisplayValue(caloriesPerDisplayUnit, input.isLabelPhoto, input.labelGrams),
-      protein_per_100g: toPer100gFromDisplayValue(proteinPerDisplayUnit, input.isLabelPhoto, input.labelGrams),
-      carbs_per_100g: toPer100gFromDisplayValue(carbsPerDisplayUnit, input.isLabelPhoto, input.labelGrams),
-      fat_per_100g: toPer100gFromDisplayValue(fatPerDisplayUnit, input.isLabelPhoto, input.labelGrams),
-      ...zeroPerServingMacros
-    }
+      calories_per_100g: toPer100gFromDisplayValue(
+        caloriesPerDisplayUnit,
+        input.isLabelPhoto,
+        input.labelGrams,
+      ),
+      protein_per_100g: toPer100gFromDisplayValue(
+        proteinPerDisplayUnit,
+        input.isLabelPhoto,
+        input.labelGrams,
+      ),
+      carbs_per_100g: toPer100gFromDisplayValue(
+        carbsPerDisplayUnit,
+        input.isLabelPhoto,
+        input.labelGrams,
+      ),
+      fat_per_100g: toPer100gFromDisplayValue(
+        fatPerDisplayUnit,
+        input.isLabelPhoto,
+        input.labelGrams,
+      ),
+      ...zeroPerServingMacros,
+    },
   };
 };
 
-export const buildManualLibraryDraft = (input: ManualLibraryDraftInput): LibraryDraftBuildResult => {
+export const buildManualLibraryDraft = (
+  input: ManualLibraryDraftInput,
+): LibraryDraftBuildResult => {
   const trimmedName = input.name.trim();
   if (!trimmedName) {
     return { draft: null, error: "Please enter a food name." };
   }
 
-  const macroTuple: [number | null, number | null, number | null, number | null] = [
+  const macroTuple: [
+    number | null,
+    number | null,
+    number | null,
+    number | null,
+  ] = [
     input.caloriesPer100g,
     input.proteinPer100g,
     input.carbsPer100g,
-    input.fatPer100g
+    input.fatPer100g,
   ];
   if (!isMacroTupleValid(macroTuple)) {
     return { draft: null, error: "Please enter valid macro values." };
   }
-  const [caloriesPer100g, proteinPer100g, carbsPer100g, fatPer100g] = macroTuple;
+  const [caloriesPer100g, proteinPer100g, carbsPer100g, fatPer100g] =
+    macroTuple;
 
-  if (input.unitType === "per_serving" && (!input.servingSizeGrams || input.servingSizeGrams <= 0)) {
+  if (
+    input.unitType === "per_serving" &&
+    (!input.servingSizeGrams || input.servingSizeGrams <= 0)
+  ) {
     return { draft: null, error: "Please enter grams per serving." };
   }
 
   const servingMultiplier =
-    input.unitType === "per_serving" && input.servingSizeGrams ? input.servingSizeGrams / 100 : 0;
+    input.unitType === "per_serving" && input.servingSizeGrams
+      ? input.servingSizeGrams / 100
+      : 0;
 
   return {
     error: null,
     draft: {
       name: trimmedName,
       unit_type: input.unitType,
-      serving_size: input.unitType === "per_serving" ? input.servingSizeGrams : null,
-      serving_unit: input.unitType === "per_serving" ? input.servingUnit.trim() || null : null,
+      serving_size:
+        input.unitType === "per_serving" ? input.servingSizeGrams : null,
+      serving_unit:
+        input.unitType === "per_serving"
+          ? input.servingUnit.trim() || null
+          : null,
       calories_per_100g: caloriesPer100g,
       protein_per_100g: proteinPer100g,
       carbs_per_100g: carbsPer100g,
@@ -142,14 +194,14 @@ export const buildManualLibraryDraft = (input: ManualLibraryDraftInput): Library
       calories_per_serving: caloriesPer100g * servingMultiplier,
       protein_per_serving: proteinPer100g * servingMultiplier,
       carbs_per_serving: carbsPer100g * servingMultiplier,
-      fat_per_serving: fatPer100g * servingMultiplier
-    }
+      fat_per_serving: fatPer100g * servingMultiplier,
+    },
   };
 };
 
 export const saveLibraryDraftWithDuplicateCheck = async (
   repository: DuplicateCheckRepository,
-  draft: SavedFoodDraft
+  draft: SavedFoodDraft,
 ): Promise<SaveLibraryDraftResult> => {
   const existing = await repository.fetchFoodByName(draft.name);
   if (existing) {
@@ -163,7 +215,7 @@ export const saveLibraryDraftWithDuplicateCheck = async (
 export const resolveDuplicateSaveChoice = async (
   repository: DuplicateCheckRepository,
   pending: PendingLibraryDuplicate,
-  choice: DuplicateSaveChoice
+  choice: DuplicateSaveChoice,
 ): Promise<void> => {
   if (choice === "update") {
     await repository.updateFood(pending.existing.id, pending.draft);
@@ -173,13 +225,17 @@ export const resolveDuplicateSaveChoice = async (
   await repository.insertFood(pending.draft);
 };
 
-export const suggestedLibraryNameFromInputs = (input: SuggestedLibraryNameInput): string | null => {
+export const suggestedLibraryNameFromInputs = (
+  input: SuggestedLibraryNameInput,
+): string | null => {
   const selected = input.selectedLibraryFoodName?.trim();
   if (selected) {
     return selected;
   }
 
-  const listNames = input.listItemNames.map((item) => item.trim()).filter(Boolean);
+  const listNames = input.listItemNames
+    .map((item) => item.trim())
+    .filter(Boolean);
   if (listNames.length) {
     return listNames.join(" + ");
   }

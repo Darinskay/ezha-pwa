@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import SelectField from "@/components/ui/SelectField.vue";
+import { invalidateDailyDataQueries } from "@/query/invalidation";
 import { queryKeys } from "@/query/keys";
 import { dailyTargetRepository } from "@/repositories/daily-target-repository";
 import { profileRepository } from "@/repositories/profile-repository";
@@ -64,12 +65,10 @@ const saveTargetMutation = useMutation({
   onSuccess: async () => {
     isEditorOpen.value = false;
     saveMessage.value = "Target saved.";
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.settingsTargets }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.daySummary }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.todaySummary }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext }),
-    ]);
+    await invalidateDailyDataQueries(queryClient, {
+      includeEntries: false,
+      includeSettingsTargets: true,
+    });
   },
 });
 
@@ -90,12 +89,10 @@ const deleteTargetMutation = useMutation({
     }
   },
   onSuccess: async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.settingsTargets }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.daySummary }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.todaySummary }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext }),
-    ]);
+    await invalidateDailyDataQueries(queryClient, {
+      includeEntries: false,
+      includeSettingsTargets: true,
+    });
   },
 });
 

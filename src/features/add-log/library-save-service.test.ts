@@ -3,7 +3,7 @@ import {
   buildManualLibraryDraft,
   buildPhotoLibraryDraft,
   resolveDuplicateSaveChoice,
-  saveLibraryDraftWithDuplicateCheck
+  saveLibraryDraftWithDuplicateCheck,
 } from "@/features/add-log/library-save-service";
 import type { SavedFood, SavedFoodDraft } from "@/types/domain";
 
@@ -25,7 +25,7 @@ const buildSavedFood = (overrides: Partial<SavedFood>): SavedFood => ({
   is_meal: false,
   created_at: null,
   updated_at: null,
-  ...overrides
+  ...overrides,
 });
 
 const sampleDraft: SavedFoodDraft = {
@@ -40,7 +40,7 @@ const sampleDraft: SavedFoodDraft = {
   calories_per_serving: 0,
   protein_per_serving: 0,
   carbs_per_serving: 0,
-  fat_per_serving: 0
+  fat_per_serving: 0,
 };
 
 describe("library-save-service", () => {
@@ -52,7 +52,7 @@ describe("library-save-service", () => {
       carbsPerDisplayUnit: 3.6,
       fatPerDisplayUnit: 5.2,
       isLabelPhoto: false,
-      labelGrams: null
+      labelGrams: null,
     });
 
     expect(result.error).toBeNull();
@@ -68,7 +68,7 @@ describe("library-save-service", () => {
       calories_per_serving: 0,
       protein_per_serving: 0,
       carbs_per_serving: 0,
-      fat_per_serving: 0
+      fat_per_serving: 0,
     });
   });
 
@@ -80,7 +80,7 @@ describe("library-save-service", () => {
       carbsPerDisplayUnit: 36,
       fatPerDisplayUnit: 9,
       isLabelPhoto: true,
-      labelGrams: 60
+      labelGrams: 60,
     });
 
     expect(result.error).toBeNull();
@@ -99,7 +99,7 @@ describe("library-save-service", () => {
       caloriesPer100g: 420,
       proteinPer100g: 30,
       carbsPer100g: 40,
-      fatPer100g: 12
+      fatPer100g: 12,
     });
 
     expect(result.error).toBeNull();
@@ -115,7 +115,7 @@ describe("library-save-service", () => {
       calories_per_serving: 189,
       protein_per_serving: 13.5,
       carbs_per_serving: 18,
-      fat_per_serving: 5.4
+      fat_per_serving: 5.4,
     });
   });
 
@@ -128,7 +128,7 @@ describe("library-save-service", () => {
       caloriesPer100g: 100,
       proteinPer100g: 5,
       carbsPer100g: 10,
-      fatPer100g: 2
+      fatPer100g: 2,
     });
     expect(noName.error).toBe("Please enter a food name.");
 
@@ -140,7 +140,7 @@ describe("library-save-service", () => {
       caloriesPer100g: null,
       proteinPer100g: 5,
       carbsPer100g: 10,
-      fatPer100g: 2
+      fatPer100g: 2,
     });
     expect(invalidMacros.error).toBe("Please enter valid macro values.");
 
@@ -152,19 +152,25 @@ describe("library-save-service", () => {
       caloriesPer100g: 65,
       proteinPer100g: 3,
       carbsPer100g: 9,
-      fatPer100g: 1.5
+      fatPer100g: 1.5,
     });
     expect(invalidServingSize.error).toBe("Please enter grams per serving.");
   });
 
   it("handles duplicate resolution path: update existing", async () => {
-    const existing = buildSavedFood({ id: "d6158bd8-e881-4ce1-bdf8-90cc31e63c6a", name: "Apple" });
+    const existing = buildSavedFood({
+      id: "d6158bd8-e881-4ce1-bdf8-90cc31e63c6a",
+      name: "Apple",
+    });
     const fetchFoodByName = vi.fn().mockResolvedValue(existing);
     const insertFood = vi.fn().mockResolvedValue(undefined);
     const updateFood = vi.fn().mockResolvedValue(undefined);
     const repository = { fetchFoodByName, insertFood, updateFood };
 
-    const saveResult = await saveLibraryDraftWithDuplicateCheck(repository, sampleDraft);
+    const saveResult = await saveLibraryDraftWithDuplicateCheck(
+      repository,
+      sampleDraft,
+    );
     expect(saveResult.status).toBe("duplicate");
     if (saveResult.status !== "duplicate") {
       return;
@@ -176,13 +182,19 @@ describe("library-save-service", () => {
   });
 
   it("handles duplicate resolution path: create new", async () => {
-    const existing = buildSavedFood({ id: "2322ca3a-89a8-467f-a6fd-697a510b8f0f", name: "Apple" });
+    const existing = buildSavedFood({
+      id: "2322ca3a-89a8-467f-a6fd-697a510b8f0f",
+      name: "Apple",
+    });
     const fetchFoodByName = vi.fn().mockResolvedValue(existing);
     const insertFood = vi.fn().mockResolvedValue(undefined);
     const updateFood = vi.fn().mockResolvedValue(undefined);
     const repository = { fetchFoodByName, insertFood, updateFood };
 
-    const saveResult = await saveLibraryDraftWithDuplicateCheck(repository, sampleDraft);
+    const saveResult = await saveLibraryDraftWithDuplicateCheck(
+      repository,
+      sampleDraft,
+    );
     expect(saveResult.status).toBe("duplicate");
     if (saveResult.status !== "duplicate") {
       return;

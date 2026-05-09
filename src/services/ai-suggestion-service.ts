@@ -5,35 +5,44 @@ import { aiSuggestionResponseSchema, parseWithSchema } from "@/types/schemas";
 
 const requestSuggestions = async (
   payload: AISuggestionRequest,
-  accessToken: string
+  accessToken: string,
 ): Promise<AISuggestionPayload[]> => {
-  const response = await fetch(`${env.supabaseUrl}/functions/v1/ai-suggestions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-      apikey: env.supabaseAnonKey
+  const response = await fetch(
+    `${env.supabaseUrl}/functions/v1/ai-suggestions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+        apikey: env.supabaseAnonKey,
+      },
+      body: JSON.stringify({
+        remaining: payload.remaining,
+        meal_type: payload.mealType,
+        max_prep_minutes: payload.maxPrepMinutes,
+        count: payload.count,
+        ingredient_notes: payload.ingredientNotes,
+        variation_note: payload.variationNote,
+        units: payload.units,
+      }),
     },
-    body: JSON.stringify({
-      remaining: payload.remaining,
-      meal_type: payload.mealType,
-      max_prep_minutes: payload.maxPrepMinutes,
-      count: payload.count,
-      ingredient_notes: payload.ingredientNotes,
-      variation_note: payload.variationNote,
-      units: payload.units
-    })
-  });
+  );
 
   const json = await response.json();
-  const parsed = parseWithSchema(aiSuggestionResponseSchema, json, "ai_suggestion_response");
+  const parsed = parseWithSchema(
+    aiSuggestionResponseSchema,
+    json,
+    "ai_suggestion_response",
+  );
 
   if (response.status === 401) {
     throw new Error("unauthorized");
   }
 
   if (!response.ok) {
-    throw new Error(parsed.error ?? `Edge Function returned ${response.status}`);
+    throw new Error(
+      parsed.error ?? `Edge Function returned ${response.status}`,
+    );
   }
 
   if (!parsed.suggestions || parsed.suggestions.length === 0) {
@@ -44,7 +53,9 @@ const requestSuggestions = async (
 };
 
 export const aiSuggestionService = {
-  async fetchSuggestions(payload: AISuggestionRequest): Promise<AISuggestionPayload[]> {
+  async fetchSuggestions(
+    payload: AISuggestionRequest,
+  ): Promise<AISuggestionPayload[]> {
     const session = await currentSession();
 
     try {
@@ -62,5 +73,5 @@ export const aiSuggestionService = {
 
       return requestSuggestions(payload, refreshed.data.session.access_token);
     }
-  }
+  },
 };

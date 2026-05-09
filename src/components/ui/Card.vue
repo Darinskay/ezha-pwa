@@ -9,7 +9,7 @@ defineProps<{ class?: string }>();
     :class="
       cn(
         'glass rounded-[1.1rem] text-card-foreground sm:rounded-[1.4rem]',
-        $props.class
+        $props.class,
       )
     "
   >

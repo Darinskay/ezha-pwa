@@ -15,10 +15,18 @@ const emit = defineEmits<{
 }>();
 
 const name = ref(props.target?.name ?? "");
-const calories = ref(props.target ? String(Math.round(props.target.calories_target)) : "");
-const protein = ref(props.target ? String(Math.round(props.target.protein_target)) : "");
-const carbs = ref(props.target ? String(Math.round(props.target.carbs_target)) : "");
-const fat = ref(props.target ? String(Math.round(props.target.fat_target)) : "");
+const calories = ref(
+  props.target ? String(Math.round(props.target.calories_target)) : "",
+);
+const protein = ref(
+  props.target ? String(Math.round(props.target.protein_target)) : "",
+);
+const carbs = ref(
+  props.target ? String(Math.round(props.target.carbs_target)) : "",
+);
+const fat = ref(
+  props.target ? String(Math.round(props.target.fat_target)) : "",
+);
 const errorMessage = ref<string | null>(null);
 
 const save = (): void => {
@@ -28,7 +36,12 @@ const save = (): void => {
     return;
   }
 
-  const values = [Number(calories.value), Number(protein.value), Number(carbs.value), Number(fat.value)];
+  const values = [
+    Number(calories.value),
+    Number(protein.value),
+    Number(carbs.value),
+    Number(fat.value),
+  ];
   if (values.some((value) => !Number.isFinite(value))) {
     errorMessage.value = "Enter valid numbers for targets.";
     return;
@@ -40,44 +53,66 @@ const save = (): void => {
     calories: values[0],
     protein: values[1],
     carbs: values[2],
-    fat: values[3]
+    fat: values[3],
   });
 };
 </script>
 
 <template>
   <div class="dialog-overlay feature feature-settings">
-    <Card class="w-full max-w-none rounded-t-[1.2rem] rounded-b-none space-y-4 border-border/80 bg-card/96 p-3 sm:max-w-lg sm:rounded-[1.4rem] sm:p-5">
+    <Card
+      class="w-full max-w-none rounded-t-[1.2rem] rounded-b-none space-y-4 border-border/80 bg-card/96 p-3 sm:max-w-lg sm:rounded-[1.4rem] sm:p-5"
+    >
       <div class="flex items-center justify-between">
-        <h3 class="text-lg font-semibold">{{ target ? "Edit Target" : "New Target" }}</h3>
+        <h3 class="text-lg font-semibold">
+          {{ target ? "Edit Target" : "New Target" }}
+        </h3>
         <Button variant="ghost" size="sm" @click="emit('close')">Close</Button>
       </div>
 
       <div class="space-y-2">
-        <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Name</label>
+        <label
+          class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+          >Name</label
+        >
         <Input v-model="name" placeholder="e.g. Basic" />
       </div>
 
       <div class="grid grid-cols-2 gap-2">
         <div class="space-y-1">
-          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Calories</label>
+          <label
+            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+            >Calories</label
+          >
           <Input v-model="calories" type="number" min="0" step="1" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Protein (g)</label>
+          <label
+            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+            >Protein (g)</label
+          >
           <Input v-model="protein" type="number" min="0" step="1" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Carbs (g)</label>
+          <label
+            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+            >Carbs (g)</label
+          >
           <Input v-model="carbs" type="number" min="0" step="1" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground">Fat (g)</label>
+          <label
+            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+            >Fat (g)</label
+          >
           <Input v-model="fat" type="number" min="0" step="1" />
         </div>
       </div>
 
-      <p v-if="errorMessage" class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      <p
+        v-if="errorMessage"
+        class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+      >
         {{ errorMessage }}
       </p>
 

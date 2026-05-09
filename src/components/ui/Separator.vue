@@ -7,8 +7,8 @@ withDefaults(
     class?: string;
   }>(),
   {
-    orientation: "horizontal"
-  }
+    orientation: "horizontal",
+  },
 );
 </script>
 
@@ -18,7 +18,7 @@ withDefaults(
       cn(
         orientation === 'horizontal' ? 'h-px w-full' : 'h-full w-px',
         'bg-[hsl(var(--feature-primary)/0.2)]',
-        $props.class
+        $props.class,
       )
     "
     aria-hidden="true"

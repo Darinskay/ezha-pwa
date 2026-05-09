@@ -9,6 +9,10 @@ const getEnv = (key: string): string => {
 export const env = {
   supabaseUrl: getEnv("VITE_SUPABASE_URL"),
   supabaseAnonKey: getEnv("VITE_SUPABASE_ANON_KEY"),
-  supabaseOAuthRedirectUrl: import.meta.env.VITE_SUPABASE_OAUTH_REDIRECT_URL as string | undefined,
-  storageBucket: (import.meta.env.VITE_FOOD_IMAGES_BUCKET as string | undefined) ?? "food-images"
+  supabaseOAuthRedirectUrl: import.meta.env.VITE_SUPABASE_OAUTH_REDIRECT_URL as
+    | string
+    | undefined,
+  storageBucket:
+    (import.meta.env.VITE_FOOD_IMAGES_BUCKET as string | undefined) ??
+    "food-images",
 };

@@ -42,11 +42,12 @@ class RetryQueueService {
           await offlineDb.retryQueue.delete(item.id);
         } catch (error) {
           const attempts = item.attempts + 1;
-          const message = error instanceof Error ? error.message : "Unknown retry error";
+          const message =
+            error instanceof Error ? error.message : "Unknown retry error";
           await offlineDb.retryQueue.update(item.id, {
             attempts,
             lastError: message,
-            nextRetryAt: Date.now() + retryBackoffMs(attempts)
+            nextRetryAt: Date.now() + retryBackoffMs(attempts),
           });
           await sleep(100);
         }
