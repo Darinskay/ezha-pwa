@@ -39,12 +39,6 @@ const router = createRouter({
           meta: { tab: "library" }
         },
         {
-          path: "history",
-          name: "history",
-          component: () => import("@/features/history/HistoryPage.vue"),
-          meta: { tab: "history" }
-        },
-        {
           path: "settings",
           name: "settings",
           component: () => import("@/features/settings/SettingsPage.vue"),

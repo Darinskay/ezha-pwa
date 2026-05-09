@@ -66,6 +66,7 @@ const saveTargetMutation = useMutation({
     saveMessage.value = "Target saved.";
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.settingsTargets }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.daySummary }),
       queryClient.invalidateQueries({ queryKey: queryKeys.todaySummary }),
       queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext }),
     ]);
@@ -91,6 +92,7 @@ const deleteTargetMutation = useMutation({
   onSuccess: async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.settingsTargets }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.daySummary }),
       queryClient.invalidateQueries({ queryKey: queryKeys.todaySummary }),
       queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext }),
     ]);

@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import { useInfiniteScroll } from "@vueuse/core";
-import { Trash2, X } from "lucide-vue-next";
+import { ChevronRight, Trash2, X } from "lucide-vue-next";
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import Input from "@/components/ui/Input.vue";
@@ -109,15 +109,51 @@ const onSaveEdit = async (draft: SavedFoodDraft): Promise<void> => {
 const onMealSaved = async (): Promise<void> => {
   loggingMeal.value = null;
   await Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.daySummary }),
     queryClient.invalidateQueries({ queryKey: queryKeys.todaySummary }),
     queryClient.invalidateQueries({ queryKey: queryKeys.todayEntries }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.history }),
     queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext }),
   ]);
 };
 
 const clearSearch = (): void => {
   searchText.value = "";
+};
+
+const foodUnitLabel = (food: SavedFood): string => {
+  if (food.is_meal) return "Meal";
+  if (food.unit_type === "per_100g") return "Per 100g";
+  if (food.serving_size && food.serving_unit) {
+    return `${Math.round(food.serving_size)} ${food.serving_unit}`;
+  }
+  return "Per serving";
+};
+
+const foodDescription = (food: SavedFood): string => {
+  const calories = food.is_meal
+    ? food.calories_per_serving
+    : food.unit_type === "per_serving"
+      ? food.calories_per_serving
+      : food.calories_per_100g;
+  const protein = food.is_meal
+    ? food.protein_per_serving
+    : food.unit_type === "per_serving"
+      ? food.protein_per_serving
+      : food.protein_per_100g;
+  const carbs = food.is_meal
+    ? food.carbs_per_serving
+    : food.unit_type === "per_serving"
+      ? food.carbs_per_serving
+      : food.carbs_per_100g;
+  const fat = food.is_meal
+    ? food.fat_per_serving
+    : food.unit_type === "per_serving"
+      ? food.fat_per_serving
+      : food.fat_per_100g;
+
+  return `${foodUnitLabel(food)} · ${Math.round(calories)} kcal · P ${Math.round(
+    protein,
+  )}g · C ${Math.round(carbs)}g · F ${Math.round(fat)}g`;
 };
 </script>
 
@@ -178,32 +214,44 @@ const clearSearch = (): void => {
         <article
           v-for="food in visibleFoods"
           :key="food.id"
-          class="cursor-pointer rounded-2xl border border-border/70 bg-card/70 p-3 transition-colors hover:bg-card/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          role="button"
-          tabindex="0"
-          @click="openFood(food)"
-          @keydown.enter.prevent="openFood(food)"
-          @keydown.space.prevent="openFood(food)"
+          class="rounded-[1.05rem] border p-2.5 sm:rounded-[1.15rem] sm:p-3"
+          style="
+            border-color: hsl(var(--feature-primary) / 0.2);
+            background: linear-gradient(
+              158deg,
+              hsl(var(--card) / 0.86),
+              hsl(var(--card) / 0.7)
+            );
+          "
         >
-          <div class="space-y-1">
-            <h3 class="font-semibold">{{ food.name }}</h3>
-            <p class="text-xs text-muted-foreground">
-              {{
-                food.is_meal
-                  ? "Meal"
-                  : food.unit_type === "per_100g"
-                    ? "Per 100g"
-                    : "Per serving"
-              }}
-              · {{ Math.round(food.calories_per_100g) }} kcal /100g
-            </p>
-          </div>
+          <div class="flex min-h-12 items-center gap-3">
+            <button
+              class="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 py-1.5 text-left transition-colors hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              type="button"
+              :aria-label="`Open ${food.name}`"
+              @click="openFood(food)"
+            >
+              <span class="min-w-0 flex-1">
+                <h3
+                  class="truncate text-sm font-semibold leading-5 sm:text-[15px]"
+                >
+                  {{ food.name }}
+                </h3>
+                <p class="truncate text-xs leading-4 text-muted-foreground">
+                  {{ foodDescription(food) }}
+                </p>
+              </span>
+              <ChevronRight
+                class="size-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+            </button>
 
-          <div class="mt-3 flex items-center gap-2">
             <Button
               v-if="food.is_meal"
               variant="secondary"
               size="sm"
+              class="h-9 rounded-full px-3"
               @click.stop="loggingMeal = food"
             >
               Log
@@ -212,13 +260,15 @@ const clearSearch = (): void => {
             <Button
               variant="ghost"
               size="sm"
-              class="text-destructive"
+              class="size-9 rounded-full p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
               :loading="deleteFoodMutation.isPending.value"
               :aria-label="`Delete ${food.name}`"
               @click.stop="onDelete(food.id)"
             >
-              <Trash2 class="size-4" />
-              Delete
+              <Trash2
+                v-if="!deleteFoodMutation.isPending.value"
+                class="size-4"
+              />
             </Button>
           </div>
         </article>

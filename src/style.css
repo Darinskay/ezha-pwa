@@ -193,13 +193,6 @@ body {
   --feature-soft-strong: 236 52% 92%;
 }
 
-.feature-history {
-  --feature-primary: 258 62% 62%;
-  --feature-secondary: 228 72% 68%;
-  --feature-soft: 238 78% 97%;
-  --feature-soft-strong: 236 52% 92%;
-}
-
 .feature-settings {
   --feature-primary: 258 62% 62%;
   --feature-secondary: 228 72% 68%;
@@ -228,11 +221,6 @@ body {
 }
 
 .dark .feature-library {
-  --feature-soft: 243 24% 19%;
-  --feature-soft-strong: 242 24% 24%;
-}
-
-.dark .feature-history {
   --feature-soft: 243 24% 19%;
   --feature-soft-strong: 242 24% 24%;
 }
@@ -409,5 +397,35 @@ body {
         transparent 44%
       );
     backdrop-filter: blur(16px);
+  }
+
+  .meal-dialog-enter-active,
+  .meal-dialog-leave-active {
+    transition: opacity 0.22s ease;
+  }
+
+  .meal-dialog-enter-active .meal-dialog-panel,
+  .meal-dialog-leave-active .meal-dialog-panel {
+    transition:
+      opacity 0.22s ease,
+      transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+    will-change: opacity, transform;
+  }
+
+  .meal-dialog-enter-from,
+  .meal-dialog-leave-to {
+    opacity: 0;
+  }
+
+  .meal-dialog-enter-to .meal-dialog-panel,
+  .meal-dialog-leave-from .meal-dialog-panel {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+
+  .meal-dialog-enter-from .meal-dialog-panel,
+  .meal-dialog-leave-to .meal-dialog-panel {
+    opacity: 0;
+    transform: translate3d(0, 100vh, 0);
   }
 }

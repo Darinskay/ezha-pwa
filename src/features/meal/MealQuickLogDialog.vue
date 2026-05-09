@@ -11,7 +11,14 @@ import { currentUserId } from "@/lib/supabase";
 import { foodEntryRepository } from "@/repositories/food-entry-repository";
 import { savedFoodRepository } from "@/repositories/saved-food-repository";
 import { resolveActiveDateForLogging } from "@/services/active-date-service";
-import type { FoodEntry, FoodEntryItem, SavedFood, SavedMealIngredient } from "@/types/domain";
+import { syncDailySummaryForDate } from "@/services/day-summary-service";
+import { useActiveDayStore } from "@/stores/active-day-store";
+import type {
+  FoodEntry,
+  FoodEntryItem,
+  SavedFood,
+  SavedMealIngredient,
+} from "@/types/domain";
 
 interface EditableIngredient {
   id: string;
@@ -33,6 +40,7 @@ const emit = defineEmits<{
   close: [];
   saved: [];
 }>();
+const activeDayStore = useActiveDayStore();
 
 const isLoading = ref(false);
 const isSaving = ref(false);
@@ -51,10 +59,11 @@ const toEditable = (ingredient: SavedMealIngredient): EditableIngredient => ({
   originalProtein: ingredient.protein,
   originalCarbs: ingredient.carbs,
   originalFat: ingredient.fat,
-  linkedFoodId: ingredient.linked_food_id ?? null
+  linkedFoodId: ingredient.linked_food_id ?? null,
 });
 
-const gramsFor = (ingredient: EditableIngredient): number => parseNumberInput(ingredient.gramsText) ?? 0;
+const gramsFor = (ingredient: EditableIngredient): number =>
+  parseNumberInput(ingredient.gramsText) ?? 0;
 const scaleFor = (ingredient: EditableIngredient): number => {
   const grams = gramsFor(ingredient);
   if (ingredient.originalGrams <= 0 || grams <= 0) return 0;
@@ -70,14 +79,16 @@ const totals = computed(() => {
         calories: acc.calories + ingredient.originalCalories * scale,
         protein: acc.protein + ingredient.originalProtein * scale,
         carbs: acc.carbs + ingredient.originalCarbs * scale,
-        fat: acc.fat + ingredient.originalFat * scale
+        fat: acc.fat + ingredient.originalFat * scale,
       };
     },
-    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    { calories: 0, protein: 0, carbs: 0, fat: 0 },
   );
 });
 
-const canSave = computed(() => ingredients.value.some((ingredient) => gramsFor(ingredient) > 0));
+const canSave = computed(() =>
+  ingredients.value.some((ingredient) => gramsFor(ingredient) > 0),
+);
 
 const loadData = async (): Promise<void> => {
   isLoading.value = true;
@@ -85,14 +96,15 @@ const loadData = async (): Promise<void> => {
   try {
     const [mealIngredients, nonMeal] = await Promise.all([
       savedFoodRepository.fetchMealIngredients(props.meal.id),
-      savedFoodRepository.fetchNonMealFoods()
+      savedFoodRepository.fetchNonMealFoods(),
     ]);
 
     ingredients.value = mealIngredients.map(toEditable);
     nonMealFoods.value = nonMeal;
     addIngredientFoodId.value = nonMeal[0]?.id ?? "";
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "Unable to load ingredients.";
+    errorMessage.value =
+      error instanceof Error ? error.message : "Unable to load ingredients.";
   } finally {
     isLoading.value = false;
   }
@@ -103,7 +115,9 @@ onMounted(() => {
 });
 
 const addIngredient = (): void => {
-  const selected = nonMealFoods.value.find((food) => food.id === addIngredientFoodId.value);
+  const selected = nonMealFoods.value.find(
+    (food) => food.id === addIngredientFoodId.value,
+  );
   if (!selected) return;
 
   const grams = parseNumberInput(addIngredientGrams.value);
@@ -119,12 +133,14 @@ const addIngredient = (): void => {
     originalProtein: macros.protein,
     originalCarbs: macros.carbs,
     originalFat: macros.fat,
-    linkedFoodId: selected.id
+    linkedFoodId: selected.id,
   });
 };
 
 const removeIngredient = (id: string): void => {
-  ingredients.value = ingredients.value.filter((ingredient) => ingredient.id !== id);
+  ingredients.value = ingredients.value.filter(
+    (ingredient) => ingredient.id !== id,
+  );
 };
 
 const buildScaledMacros = (ingredient: EditableIngredient) => {
@@ -133,7 +149,7 @@ const buildScaledMacros = (ingredient: EditableIngredient) => {
     calories: ingredient.originalCalories * scale,
     protein: ingredient.originalProtein * scale,
     carbs: ingredient.originalCarbs * scale,
-    fat: ingredient.originalFat * scale
+    fat: ingredient.originalFat * scale,
   };
 };
 
@@ -149,7 +165,10 @@ const save = async (): Promise<void> => {
   try {
     const userId = await currentUserId();
     const entryId = crypto.randomUUID();
-    const activeDate = await resolveActiveDateForLogging(userId);
+    const activeDate = await resolveActiveDateForLogging(
+      userId,
+      activeDayStore.activeDate,
+    );
 
     const entry: FoodEntry = {
       id: entryId,
@@ -165,7 +184,7 @@ const save = async (): Promise<void> => {
       ai_confidence: null,
       ai_source: "library",
       ai_notes: "Logged from saved meal",
-      created_at: null
+      created_at: null,
     };
 
     const items: FoodEntryItem[] = ingredients.value
@@ -185,21 +204,26 @@ const save = async (): Promise<void> => {
           fat: scaled.fat,
           ai_confidence: null,
           ai_notes: "",
-          created_at: null
+          created_at: null,
         } satisfies FoodEntryItem;
       })
       .filter(Boolean) as FoodEntryItem[];
 
     await foodEntryRepository.insertFoodEntry(entry, items);
+    await syncDailySummaryForDate(activeDate);
     emit("saved");
     emit("close");
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to save entry.";
+    const message =
+      error instanceof Error ? error.message : "Unable to save entry.";
     if (!navigator.onLine || message.toLowerCase().includes("network")) {
       try {
         const userId = await currentUserId();
         const entryId = crypto.randomUUID();
-        const activeDate = await resolveActiveDateForLogging(userId);
+        const activeDate = await resolveActiveDateForLogging(
+          userId,
+          activeDayStore.activeDate,
+        );
 
         const queuedEntry: FoodEntry = {
           id: entryId,
@@ -215,7 +239,7 @@ const save = async (): Promise<void> => {
           ai_confidence: null,
           ai_source: "library",
           ai_notes: "Logged from saved meal",
-          created_at: null
+          created_at: null,
         };
 
         const queuedItems: FoodEntryItem[] = ingredients.value
@@ -235,17 +259,21 @@ const save = async (): Promise<void> => {
               fat: scaled.fat,
               ai_confidence: null,
               ai_notes: "",
-              created_at: null
+              created_at: null,
             } satisfies FoodEntryItem;
           })
           .filter(Boolean) as FoodEntryItem[];
 
-        await enqueueRetry("create_food_entry", { entry: queuedEntry, items: queuedItems });
+        await enqueueRetry("create_food_entry", {
+          entry: queuedEntry,
+          items: queuedItems,
+        });
         emit("saved");
         emit("close");
         return;
       } catch (queueError) {
-        errorMessage.value = queueError instanceof Error ? queueError.message : message;
+        errorMessage.value =
+          queueError instanceof Error ? queueError.message : message;
         return;
       }
     }
@@ -259,7 +287,9 @@ const save = async (): Promise<void> => {
 
 <template>
   <div class="dialog-overlay feature feature-library">
-    <Card class="max-h-[88vh] w-full max-w-none rounded-t-[1.2rem] rounded-b-none overflow-y-auto border-border/80 bg-card/96 p-3 sm:max-h-[92vh] sm:max-w-2xl sm:rounded-[1.4rem] sm:p-5">
+    <Card
+      class="max-h-[88vh] w-full max-w-none rounded-t-[1.2rem] rounded-b-none overflow-y-auto border-border/80 bg-card/96 p-3 sm:max-h-[92vh] sm:max-w-2xl sm:rounded-[1.4rem] sm:p-5"
+    >
       <div class="mb-4 flex items-center justify-between">
         <div>
           <h3 class="text-lg font-semibold">Log Meal</h3>
@@ -268,7 +298,12 @@ const save = async (): Promise<void> => {
         <Button variant="ghost" size="sm" @click="emit('close')">Close</Button>
       </div>
 
-      <div v-if="isLoading" class="py-8 text-center text-sm text-muted-foreground">Loading...</div>
+      <div
+        v-if="isLoading"
+        class="py-8 text-center text-sm text-muted-foreground"
+      >
+        Loading...
+      </div>
 
       <template v-else>
         <div class="space-y-3">
@@ -279,43 +314,80 @@ const save = async (): Promise<void> => {
           >
             <div class="flex items-start justify-between gap-2">
               <h4 class="text-sm font-semibold">{{ ingredient.name }}</h4>
-              <Button variant="ghost" size="sm" @click="removeIngredient(ingredient.id)">Remove</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                @click="removeIngredient(ingredient.id)"
+                >Remove</Button
+              >
             </div>
             <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <Input v-model="ingredient.gramsText" type="number" min="0" step="0.1" placeholder="Grams" />
-              <p class="rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                {{ Math.round(buildScaledMacros(ingredient).calories) }} kcal · P{{ Math.round(buildScaledMacros(ingredient).protein) }} · C{{ Math.round(buildScaledMacros(ingredient).carbs) }} · F{{ Math.round(buildScaledMacros(ingredient).fat) }}
+              <Input
+                v-model="ingredient.gramsText"
+                type="number"
+                min="0"
+                step="0.1"
+                placeholder="Grams"
+              />
+              <p
+                class="rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+              >
+                {{ Math.round(buildScaledMacros(ingredient).calories) }} kcal ·
+                P{{ Math.round(buildScaledMacros(ingredient).protein) }} · C{{
+                  Math.round(buildScaledMacros(ingredient).carbs)
+                }}
+                · F{{ Math.round(buildScaledMacros(ingredient).fat) }}
               </p>
             </div>
           </article>
         </div>
 
-        <div class="mt-4 space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3">
+        <div
+          class="mt-4 space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3"
+        >
           <h4 class="text-sm font-semibold">Add ingredient</h4>
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <SelectField v-model="addIngredientFoodId">
-              <option v-for="food in nonMealFoods" :key="food.id" :value="food.id">
+              <option
+                v-for="food in nonMealFoods"
+                :key="food.id"
+                :value="food.id"
+              >
                 {{ food.name }}
               </option>
             </SelectField>
-            <Input v-model="addIngredientGrams" type="number" min="0" step="0.1" placeholder="Grams" />
+            <Input
+              v-model="addIngredientGrams"
+              type="number"
+              min="0"
+              step="0.1"
+              placeholder="Grams"
+            />
             <Button variant="secondary" @click="addIngredient">Add</Button>
           </div>
         </div>
 
-        <div class="mt-4 rounded-xl border border-border/70 bg-muted/40 p-3 text-sm">
-          Total: {{ formatMacro(totals.calories, 1) }} kcal ·
-          P{{ formatMacro(totals.protein, 1) }}g ·
-          C{{ formatMacro(totals.carbs, 1) }}g ·
-          F{{ formatMacro(totals.fat, 1) }}g
+        <div
+          class="mt-4 rounded-xl border border-border/70 bg-muted/40 p-3 text-sm"
+        >
+          Total: {{ formatMacro(totals.calories, 1) }} kcal · P{{
+            formatMacro(totals.protein, 1)
+          }}g · C{{ formatMacro(totals.carbs, 1) }}g · F{{
+            formatMacro(totals.fat, 1)
+          }}g
         </div>
 
-        <p v-if="errorMessage" class="mt-3 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p
+          v-if="errorMessage"
+          class="mt-3 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
           {{ errorMessage }}
         </p>
 
         <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <Button :loading="isSaving" :disabled="!canSave" @click="save">Save log</Button>
+          <Button :loading="isSaving" :disabled="!canSave" @click="save"
+            >Save log</Button
+          >
           <Button variant="ghost" @click="emit('close')">Cancel</Button>
         </div>
       </template>
