@@ -17,7 +17,11 @@ export interface AnalyzePayload {
 }
 
 const toEstimate = (payload: unknown): MacroEstimate => {
-  const parsed = parseWithSchema(aiAnalysisResponseSchema, payload, "ai_analysis_response");
+  const parsed = parseWithSchema(
+    aiAnalysisResponseSchema,
+    payload,
+    "ai_analysis_response",
+  );
 
   if (parsed.error) {
     throw new Error(parsed.error);
@@ -33,7 +37,7 @@ const toEstimate = (payload: unknown): MacroEstimate => {
           calories: parsed.calories,
           protein: parsed.protein,
           carbs: parsed.carbs,
-          fat: parsed.fat
+          fat: parsed.fat,
         }
       : null);
 
@@ -50,26 +54,30 @@ const toEstimate = (payload: unknown): MacroEstimate => {
     source: parsed.source,
     foodName: parsed.food_name ?? null,
     notes: parsed.notes,
-    items: parsed.items ?? []
+    items: parsed.items ?? [],
   };
 };
 
-const makeRequest = async (body: Record<string, unknown>, accessToken: string, stream = false): Promise<Response> => {
+const makeRequest = async (
+  body: Record<string, unknown>,
+  accessToken: string,
+  stream = false,
+): Promise<Response> => {
   return fetch(`${env.supabaseUrl}/functions/v1/ai-estimate`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: stream ? "text/event-stream" : "application/json",
       Authorization: `Bearer ${accessToken}`,
-      apikey: env.supabaseAnonKey
+      apikey: env.supabaseAnonKey,
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   });
 };
 
 const withSessionRetry = async <T>(
   request: (accessToken: string) => Promise<T>,
-  onUnauthorized?: () => Promise<void>
+  onUnauthorized?: () => Promise<void>,
 ): Promise<T> => {
   try {
     const session = await currentSession();
@@ -81,7 +89,10 @@ const withSessionRetry = async <T>(
 
     const refreshed = await supabase.auth.refreshSession();
     if (refreshed.error || !refreshed.data.session) {
-      throw new Error(refreshed.error?.message ?? "Your session expired. Please log in again.");
+      throw new Error(
+        refreshed.error?.message ??
+          "Your session expired. Please log in again.",
+      );
     }
 
     if (onUnauthorized) {
@@ -95,7 +106,8 @@ const withSessionRetry = async <T>(
 export const aiAnalysisService = {
   async analyze(payload: AnalyzePayload): Promise<MacroEstimate> {
     const text = payload.text?.trim() ?? "";
-    const items = payload.items?.filter((item) => item.name.trim() && item.grams > 0) ?? [];
+    const items =
+      payload.items?.filter((item) => item.name.trim() && item.grams > 0) ?? [];
 
     if (!text && !payload.imagePath && items.length === 0) {
       throw new Error("Please enter a food description or attach a photo.");
@@ -105,7 +117,7 @@ export const aiAnalysisService = {
       text: text || undefined,
       items: items.length > 0 ? items : undefined,
       imagePath: payload.imagePath,
-      inputType: payload.inputType
+      inputType: payload.inputType,
     };
 
     return withSessionRetry(async (accessToken) => {
@@ -117,7 +129,10 @@ export const aiAnalysisService = {
       }
 
       if (!response.ok) {
-        const message = typeof json?.error === "string" ? json.error : `Edge Function returned ${response.status}`;
+        const message =
+          typeof json?.error === "string"
+            ? json.error
+            : `Edge Function returned ${response.status}`;
         throw new Error(message);
       }
 
@@ -125,9 +140,13 @@ export const aiAnalysisService = {
     });
   },
 
-  async analyzeStream(payload: AnalyzePayload, onEvent: (event: AIStreamEvent) => void): Promise<void> {
+  async analyzeStream(
+    payload: AnalyzePayload,
+    onEvent: (event: AIStreamEvent) => void,
+  ): Promise<void> {
     const text = payload.text?.trim() ?? "";
-    const items = payload.items?.filter((item) => item.name.trim() && item.grams > 0) ?? [];
+    const items =
+      payload.items?.filter((item) => item.name.trim() && item.grams > 0) ?? [];
 
     if (!text && !payload.imagePath && items.length === 0) {
       throw new Error("Please enter a food description or attach a photo.");
@@ -138,7 +157,7 @@ export const aiAnalysisService = {
       items: items.length > 0 ? items : undefined,
       imagePath: payload.imagePath,
       inputType: payload.inputType,
-      stream: true
+      stream: true,
     };
 
     await withSessionRetry(async (accessToken) => {
@@ -164,7 +183,10 @@ export const aiAnalysisService = {
 
         for (const block of blocks) {
           const lines = block.split("\n");
-          const event = lines.find((line) => line.startsWith("event:"))?.replace("event:", "").trim();
+          const event = lines
+            .find((line) => line.startsWith("event:"))
+            ?.replace("event:", "")
+            .trim();
           const data = lines
             .filter((line) => line.startsWith("data:"))
             .map((line) => line.replace("data:", "").trim())
@@ -188,5 +210,5 @@ export const aiAnalysisService = {
         }
       }
     });
-  }
+  },
 };

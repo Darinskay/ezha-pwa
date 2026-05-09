@@ -6,6 +6,7 @@ import MacroProgressTable from "@/components/MacroProgressTable.vue";
 import FoodEntryCard from "@/components/FoodEntryCard.vue";
 import { EXAMPLE_TARGETS } from "@/lib/macros";
 import { foodEntryRepository } from "@/repositories/food-entry-repository";
+import { invalidateDailyDataQueries } from "@/query/invalidation";
 import { queryKeys } from "@/query/keys";
 import { syncDailySummaryForDate } from "@/services/day-summary-service";
 import { fetchDayBootstrap } from "@/services/profile-bootstrap";
@@ -28,18 +29,21 @@ const todaySummaryQuery = useQuery({
   },
 });
 const todayData = computed(() => todaySummaryQuery.data.value);
+const summaryEntries = computed(() => todayData.value?.entries ?? []);
 const todayError = computed(
   () => (todaySummaryQuery.error.value as Error | null) ?? null,
 );
 
 const todayEntriesQuery = useQuery({
   queryKey: computed(() =>
-    queryKeys.todayEntriesByDate(todayData.value?.activeDate ?? "pending"),
+    queryKeys.todayEntriesByDate(
+      todayData.value?.activeDate ?? "pending",
+      summaryEntries.value.map((entry) => entry.id),
+    ),
   ),
   enabled: computed(() => !!todayData.value?.activeDate),
   queryFn: async () => {
-    const entries = todaySummaryQuery.data.value?.entries ?? [];
-    return foodEntryRepository.fetchItemsForEntries(entries);
+    return foodEntryRepository.fetchItemsForEntries(summaryEntries.value);
   },
 });
 
@@ -54,12 +58,7 @@ const deleteEntryMutation = useMutation({
     await syncDailySummaryForDate(activeDayStore.activeDate);
   },
   onSuccess: async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.daySummary }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.todaySummary }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.todayEntries }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext }),
-    ]);
+    await invalidateDailyDataQueries(queryClient);
     showDeleteToast.value = true;
     if (deleteToastTimer) clearTimeout(deleteToastTimer);
     deleteToastTimer = setTimeout(() => {

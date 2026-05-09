@@ -52,13 +52,17 @@ const resizeImage = async (file: Blob): Promise<Blob> => {
         resolve(blob);
       },
       "image/jpeg",
-      JPEG_QUALITY
+      JPEG_QUALITY,
     );
   });
 };
 
 export const storageService = {
-  async uploadFoodImage(file: Blob, userId: string, entryId: string): Promise<string> {
+  async uploadFoodImage(
+    file: Blob,
+    userId: string,
+    entryId: string,
+  ): Promise<string> {
     const processed = await resizeImage(file);
     const path = `${userId}/${entryId}.jpg`;
     const { error } = await supabase.storage
@@ -70,5 +74,5 @@ export const storageService = {
     }
 
     return path;
-  }
+  },
 };

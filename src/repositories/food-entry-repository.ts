@@ -1,16 +1,34 @@
-import { dateKeyForQuery, ensureNoError, getUserId, supabaseClient } from "@/repositories/repository-utils";
-import type { FoodEntry, FoodEntryItem, FoodEntryWithItems } from "@/types/domain";
+import {
+  dateKeyForQuery,
+  ensureNoError,
+  getUserId,
+  supabaseClient,
+} from "@/repositories/repository-utils";
+import type {
+  FoodEntry,
+  FoodEntryItem,
+  FoodEntryWithItems,
+} from "@/types/domain";
 import {
   foodEntryItemSchema,
   foodEntrySchema,
-  parseListWithSchema
+  parseListWithSchema,
 } from "@/types/schemas";
 
 const allowedInputTypes = new Set(["photo", "text", "photo+text"]);
-const allowedSources = new Set(["food_photo", "label_photo", "text", "unknown", "library"]);
+const allowedSources = new Set([
+  "food_photo",
+  "label_photo",
+  "text",
+  "unknown",
+  "library",
+]);
 
 export const foodEntryRepository = {
-  async insertFoodEntry(entry: FoodEntry, items: FoodEntryItem[] = []): Promise<void> {
+  async insertFoodEntry(
+    entry: FoodEntry,
+    items: FoodEntryItem[] = [],
+  ): Promise<void> {
     const userId = await getUserId();
     const createdAt = entry.created_at ?? new Date().toISOString();
 
@@ -18,11 +36,17 @@ export const foodEntryRepository = {
       ...entry,
       user_id: userId,
       created_at: createdAt,
-      input_type: allowedInputTypes.has(entry.input_type) ? entry.input_type : "text",
-      ai_source: allowedSources.has(entry.ai_source) ? entry.ai_source : "unknown"
+      input_type: allowedInputTypes.has(entry.input_type)
+        ? entry.input_type
+        : "text",
+      ai_source: allowedSources.has(entry.ai_source)
+        ? entry.ai_source
+        : "unknown",
     };
 
-    const insertEntryResponse = await supabaseClient.from("food_entries").insert(payload);
+    const insertEntryResponse = await supabaseClient
+      .from("food_entries")
+      .insert(payload);
     ensureNoError(insertEntryResponse.error);
 
     if (items.length === 0) {
@@ -33,10 +57,12 @@ export const foodEntryRepository = {
       ...item,
       user_id: userId,
       entry_id: entry.id,
-      created_at: item.created_at ?? createdAt
+      created_at: item.created_at ?? createdAt,
     }));
 
-    const insertItemsResponse = await supabaseClient.from("food_entry_items").insert(itemPayloads);
+    const insertItemsResponse = await supabaseClient
+      .from("food_entry_items")
+      .insert(itemPayloads);
 
     if (insertItemsResponse.error) {
       await supabaseClient.from("food_entries").delete().eq("id", entry.id);
@@ -67,7 +93,10 @@ export const foodEntryRepository = {
     return parseListWithSchema(foodEntrySchema, data ?? [], "food_entries");
   },
 
-  async fetchEntriesRange(startDate: Date, endDate: Date): Promise<FoodEntry[]> {
+  async fetchEntriesRange(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<FoodEntry[]> {
     const startString = dateKeyForQuery(startDate);
     const endString = dateKeyForQuery(endDate);
 
@@ -84,7 +113,10 @@ export const foodEntryRepository = {
   },
 
   async deleteEntry(id: string): Promise<void> {
-    const { error } = await supabaseClient.from("food_entries").delete().eq("id", id);
+    const { error } = await supabaseClient
+      .from("food_entries")
+      .delete()
+      .eq("id", id);
     ensureNoError(error);
   },
 
@@ -96,7 +128,11 @@ export const foodEntryRepository = {
       .order("created_at", { ascending: true });
 
     ensureNoError(error);
-    return parseListWithSchema(foodEntryItemSchema, data ?? [], "food_entry_items");
+    return parseListWithSchema(
+      foodEntryItemSchema,
+      data ?? [],
+      "food_entry_items",
+    );
   },
 
   async fetchEntriesWithItems(date: Date): Promise<FoodEntryWithItems[]> {
@@ -104,17 +140,24 @@ export const foodEntryRepository = {
     return this.fetchItemsForEntries(entries);
   },
 
-  async fetchEntriesWithItemsByDateKey(dateKey: string): Promise<FoodEntryWithItems[]> {
+  async fetchEntriesWithItemsByDateKey(
+    dateKey: string,
+  ): Promise<FoodEntryWithItems[]> {
     const entries = await this.fetchEntriesByDateKey(dateKey);
     return this.fetchItemsForEntries(entries);
   },
 
-  async fetchEntriesWithItemsRange(startDate: Date, endDate: Date): Promise<FoodEntryWithItems[]> {
+  async fetchEntriesWithItemsRange(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<FoodEntryWithItems[]> {
     const entries = await this.fetchEntriesRange(startDate, endDate);
     return this.fetchItemsForEntries(entries);
   },
 
-  async fetchItemsForEntries(entries: FoodEntry[]): Promise<FoodEntryWithItems[]> {
+  async fetchItemsForEntries(
+    entries: FoodEntry[],
+  ): Promise<FoodEntryWithItems[]> {
     if (entries.length === 0) return [];
 
     const entryIds = entries.map((entry) => entry.id);
@@ -126,7 +169,11 @@ export const foodEntryRepository = {
 
     ensureNoError(error);
 
-    const items = parseListWithSchema(foodEntryItemSchema, data ?? [], "food_entry_items");
+    const items = parseListWithSchema(
+      foodEntryItemSchema,
+      data ?? [],
+      "food_entry_items",
+    );
     const itemsByEntryId = new Map<string, FoodEntryItem[]>();
 
     for (const item of items) {
@@ -137,7 +184,7 @@ export const foodEntryRepository = {
 
     return entries.map((entry) => ({
       entry,
-      items: itemsByEntryId.get(entry.id) ?? []
+      items: itemsByEntryId.get(entry.id) ?? [],
     }));
-  }
+  },
 };

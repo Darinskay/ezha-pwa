@@ -22,20 +22,20 @@ export default defineConfig({
           {
             src: "/logo.svg",
             sizes: "512x512",
-            type: "image/svg+xml"
-          },
-          {
-            src: "/logo.svg",
-            sizes: "512x512",
-            type: "image/svg+xml"
+            type: "image/svg+xml",
           },
           {
             src: "/logo.svg",
             sizes: "512x512",
             type: "image/svg+xml",
-            purpose: "maskable"
-          }
-        ]
+          },
+          {
+            src: "/logo.svg",
+            sizes: "512x512",
+            type: "image/svg+xml",
+            purpose: "maskable",
+          },
+        ],
       },
       workbox: {
         navigateFallbackDenylist: [/^\/api\//],
@@ -45,25 +45,25 @@ export default defineConfig({
             handler: "NetworkFirst",
             options: {
               cacheName: "supabase-runtime",
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 }
-            }
-          }
-        ]
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
+            },
+          },
+        ],
       },
       devOptions: {
         enabled: true,
-        type: "module"
-      }
-    })
+        type: "module",
+      },
+    }),
   ],
   resolve: {
     alias: {
-      "@": fileURLToPath(new URL("./src", import.meta.url))
-    }
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
   },
   server: {
     host: "127.0.0.1",
     port: 5176,
-    strictPort: true
-  }
+    strictPort: true,
+  },
 });

@@ -1,7 +1,11 @@
 import { z } from "zod";
 
 const uuidSchema = z.string().uuid();
-const nullableDateTime = z.string().datetime({ offset: true }).nullable().optional();
+const nullableDateTime = z
+  .string()
+  .datetime({ offset: true })
+  .nullable()
+  .optional();
 
 export const profileSchema = z.object({
   user_id: uuidSchema,
@@ -12,7 +16,7 @@ export const profileSchema = z.object({
   active_date: z.string(),
   active_target_id: uuidSchema.nullable(),
   created_at: z.string(),
-  updated_at: z.string()
+  updated_at: z.string(),
 });
 
 export const dailyTargetSchema = z.object({
@@ -24,7 +28,7 @@ export const dailyTargetSchema = z.object({
   carbs_target: z.coerce.number(),
   fat_target: z.coerce.number(),
   created_at: z.string().nullable().optional(),
-  updated_at: z.string().nullable().optional()
+  updated_at: z.string().nullable().optional(),
 });
 
 export const dailySummarySchema = z.object({
@@ -41,7 +45,7 @@ export const dailySummarySchema = z.object({
   has_data: z.coerce.boolean(),
   daily_target_id: uuidSchema.nullable().optional(),
   daily_target_name: z.string().nullable().optional(),
-  created_at: z.string().nullable().optional()
+  created_at: z.string().nullable().optional(),
 });
 
 export const foodEntrySchema = z.object({
@@ -56,9 +60,15 @@ export const foodEntrySchema = z.object({
   carbs: z.coerce.number(),
   fat: z.coerce.number(),
   ai_confidence: z.coerce.number().nullable().optional(),
-  ai_source: z.enum(["food_photo", "label_photo", "text", "unknown", "library"]),
+  ai_source: z.enum([
+    "food_photo",
+    "label_photo",
+    "text",
+    "unknown",
+    "library",
+  ]),
   ai_notes: z.string(),
-  created_at: nullableDateTime
+  created_at: nullableDateTime,
 });
 
 export const foodEntryItemSchema = z.object({
@@ -73,7 +83,7 @@ export const foodEntryItemSchema = z.object({
   fat: z.coerce.number(),
   ai_confidence: z.coerce.number().nullable().optional(),
   ai_notes: z.string(),
-  created_at: nullableDateTime
+  created_at: nullableDateTime,
 });
 
 export const savedFoodSchema = z.object({
@@ -93,7 +103,7 @@ export const savedFoodSchema = z.object({
   fat_per_serving: z.coerce.number(),
   is_meal: z.coerce.boolean(),
   created_at: nullableDateTime,
-  updated_at: nullableDateTime
+  updated_at: nullableDateTime,
 });
 
 export const savedMealIngredientSchema = z.object({
@@ -107,7 +117,7 @@ export const savedMealIngredientSchema = z.object({
   carbs: z.coerce.number(),
   fat: z.coerce.number(),
   linked_food_id: uuidSchema.nullable().optional(),
-  created_at: nullableDateTime
+  created_at: nullableDateTime,
 });
 
 export const aiItemEstimateSchema = z.object({
@@ -118,14 +128,14 @@ export const aiItemEstimateSchema = z.object({
   carbs: z.coerce.number(),
   fat: z.coerce.number(),
   confidence: z.coerce.number().nullable().optional(),
-  notes: z.string().nullable().optional()
+  notes: z.string().nullable().optional(),
 });
 
 const aiTotalsSchema = z.object({
   calories: z.coerce.number(),
   protein: z.coerce.number(),
   carbs: z.coerce.number(),
-  fat: z.coerce.number()
+  fat: z.coerce.number(),
 });
 
 export const aiAnalysisResponseSchema = z.object({
@@ -139,7 +149,7 @@ export const aiAnalysisResponseSchema = z.object({
   food_name: z.string().nullable().optional(),
   notes: z.string().optional(),
   items: z.array(aiItemEstimateSchema).optional(),
-  error: z.string().optional()
+  error: z.string().optional(),
 });
 
 export const aiSuggestionPayloadSchema = z.object({
@@ -149,15 +159,19 @@ export const aiSuggestionPayloadSchema = z.object({
   protein: z.coerce.number(),
   carbs: z.coerce.number(),
   fat: z.coerce.number(),
-  notes: z.string().optional()
+  notes: z.string().optional(),
 });
 
 export const aiSuggestionResponseSchema = z.object({
   suggestions: z.array(aiSuggestionPayloadSchema).optional(),
-  error: z.string().optional()
+  error: z.string().optional(),
 });
 
-export const parseWithSchema = <T>(schema: z.ZodSchema<T>, input: unknown, label: string): T => {
+export const parseWithSchema = <T>(
+  schema: z.ZodSchema<T>,
+  input: unknown,
+  label: string,
+): T => {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
     throw new Error(`${label} validation failed`);
@@ -165,7 +179,11 @@ export const parseWithSchema = <T>(schema: z.ZodSchema<T>, input: unknown, label
   return parsed.data;
 };
 
-export const parseListWithSchema = <T>(schema: z.ZodSchema<T>, input: unknown, label: string): T[] => {
+export const parseListWithSchema = <T>(
+  schema: z.ZodSchema<T>,
+  input: unknown,
+  label: string,
+): T[] => {
   const arraySchema = z.array(schema);
   return parseWithSchema(arraySchema, input, label);
 };

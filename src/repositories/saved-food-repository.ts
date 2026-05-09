@@ -1,20 +1,27 @@
-import { ensureNoError, getUserId, supabaseClient } from "@/repositories/repository-utils";
+import {
+  ensureNoError,
+  getUserId,
+  supabaseClient,
+} from "@/repositories/repository-utils";
 import type {
   SavedFood,
   SavedFoodDraft,
   SavedMealIngredient,
-  SavedMealIngredientDraft
+  SavedMealIngredientDraft,
 } from "@/types/domain";
 import {
   parseListWithSchema,
   parseWithSchema,
   savedFoodSchema,
-  savedMealIngredientSchema
+  savedMealIngredientSchema,
 } from "@/types/schemas";
 
 export const savedFoodRepository = {
   async fetchFoods(): Promise<SavedFood[]> {
-    const { data, error } = await supabaseClient.from("saved_foods").select("*").order("name", { ascending: true });
+    const { data, error } = await supabaseClient
+      .from("saved_foods")
+      .select("*")
+      .order("name", { ascending: true });
     ensureNoError(error);
     return parseListWithSchema(savedFoodSchema, data ?? [], "saved_foods");
   },
@@ -62,8 +69,11 @@ export const savedFoodRepository = {
 
     const normalizedName = trimmedName.toLocaleLowerCase();
     const exactMatch =
-      data.find((food) => typeof food.name === "string" && food.name.trim().toLocaleLowerCase() === normalizedName) ??
-      null;
+      data.find(
+        (food) =>
+          typeof food.name === "string" &&
+          food.name.trim().toLocaleLowerCase() === normalizedName,
+      ) ?? null;
 
     if (!exactMatch) {
       return null;
@@ -81,17 +91,28 @@ export const savedFoodRepository = {
 
   async updateFood(id: string, draft: SavedFoodDraft): Promise<void> {
     const userId = await getUserId();
-    const { error } = await supabaseClient.from("saved_foods").update(draft).eq("id", id).eq("user_id", userId);
+    const { error } = await supabaseClient
+      .from("saved_foods")
+      .update(draft)
+      .eq("id", id)
+      .eq("user_id", userId);
     ensureNoError(error);
   },
 
   async deleteFood(id: string): Promise<void> {
     const userId = await getUserId();
-    const { error } = await supabaseClient.from("saved_foods").delete().eq("id", id).eq("user_id", userId);
+    const { error } = await supabaseClient
+      .from("saved_foods")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId);
     ensureNoError(error);
   },
 
-  async insertMeal(name: string, ingredients: SavedMealIngredientDraft[]): Promise<void> {
+  async insertMeal(
+    name: string,
+    ingredients: SavedMealIngredientDraft[],
+  ): Promise<void> {
     const userId = await getUserId();
     const mealId = crypto.randomUUID();
 
@@ -108,10 +129,12 @@ export const savedFoodRepository = {
       calories_per_serving: 0,
       protein_per_serving: 0,
       carbs_per_serving: 0,
-      fat_per_serving: 0
+      fat_per_serving: 0,
     };
 
-    const mealInsert = await supabaseClient.from("saved_foods").insert(mealPayload);
+    const mealInsert = await supabaseClient
+      .from("saved_foods")
+      .insert(mealPayload);
     ensureNoError(mealInsert.error);
 
     if (ingredients.length === 0) {
@@ -127,7 +150,7 @@ export const savedFoodRepository = {
       protein: ingredient.protein,
       carbs: ingredient.carbs,
       fat: ingredient.fat,
-      linked_food_id: ingredient.linked_food_id
+      linked_food_id: ingredient.linked_food_id,
     }));
 
     const insertIngredients = await supabaseClient
@@ -145,10 +168,16 @@ export const savedFoodRepository = {
       .order("created_at", { ascending: true });
 
     ensureNoError(error);
-    return parseListWithSchema(savedMealIngredientSchema, data ?? [], "saved_meal_ingredients");
+    return parseListWithSchema(
+      savedMealIngredientSchema,
+      data ?? [],
+      "saved_meal_ingredients",
+    );
   },
 
-  async fetchMealIngredientsByMealIds(mealIds: string[]): Promise<Map<string, SavedMealIngredient[]>> {
+  async fetchMealIngredientsByMealIds(
+    mealIds: string[],
+  ): Promise<Map<string, SavedMealIngredient[]>> {
     const grouped = new Map<string, SavedMealIngredient[]>();
     if (mealIds.length === 0) {
       return grouped;
@@ -161,7 +190,11 @@ export const savedFoodRepository = {
       .order("created_at", { ascending: true });
 
     ensureNoError(error);
-    const rows = parseListWithSchema(savedMealIngredientSchema, data ?? [], "saved_meal_ingredients");
+    const rows = parseListWithSchema(
+      savedMealIngredientSchema,
+      data ?? [],
+      "saved_meal_ingredients",
+    );
 
     for (const row of rows) {
       const bucket = grouped.get(row.meal_id) ?? [];
@@ -170,5 +203,5 @@ export const savedFoodRepository = {
     }
 
     return grouped;
-  }
+  },
 };

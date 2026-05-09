@@ -45,7 +45,8 @@ export const useAuthStore = defineStore("auth", () => {
     try {
       await action();
     } catch (error) {
-      errorMessage.value = error instanceof Error ? error.message : "Unexpected error";
+      errorMessage.value =
+        error instanceof Error ? error.message : "Unexpected error";
     } finally {
       isLoading.value = false;
     }
@@ -53,7 +54,10 @@ export const useAuthStore = defineStore("auth", () => {
 
   const signIn = async (email: string, password: string): Promise<void> => {
     await perform(async () => {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
       if (error) throw error;
     });
   };
@@ -70,8 +74,8 @@ export const useAuthStore = defineStore("auth", () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: env.supabaseOAuthRedirectUrl
-        }
+          redirectTo: env.supabaseOAuthRedirectUrl,
+        },
       });
       if (error) throw error;
     });
@@ -97,6 +101,6 @@ export const useAuthStore = defineStore("auth", () => {
     signUp,
     signInWithGoogle,
     signOut,
-    setSession
+    setSession,
   };
 });

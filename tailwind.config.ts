@@ -20,12 +20,12 @@ export default {
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         destructive: "hsl(var(--destructive))",
-        "destructive-foreground": "hsl(var(--destructive-foreground))"
+        "destructive-foreground": "hsl(var(--destructive-foreground))",
       },
       borderRadius: {
         lg: "0.9rem",
         md: "calc(0.9rem - 2px)",
-        sm: "calc(0.9rem - 4px)"
+        sm: "calc(0.9rem - 4px)",
       },
       fontFamily: {
         sans: [
@@ -36,7 +36,7 @@ export default {
           '"Helvetica Neue"',
           "ui-sans-serif",
           "system-ui",
-          "sans-serif"
+          "sans-serif",
         ],
         mono: [
           '"SF Mono"',
@@ -47,13 +47,13 @@ export default {
           "Consolas",
           '"Liberation Mono"',
           '"Courier New"',
-          "monospace"
-        ]
+          "monospace",
+        ],
       },
       boxShadow: {
-        card: "0 8px 30px rgb(0 0 0 / 0.06)"
-      }
-    }
+        card: "0 8px 30px rgb(0 0 0 / 0.06)",
+      },
+    },
   },
-  plugins: []
+  plugins: [],
 } satisfies Config;

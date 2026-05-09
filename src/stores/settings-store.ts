@@ -5,7 +5,8 @@ import type { AppAppearance } from "@/types/domain";
 
 const applyAppearance = (appearance: AppAppearance): void => {
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const isDark = appearance === "dark" || (appearance === "system" && prefersDark);
+  const isDark =
+    appearance === "dark" || (appearance === "system" && prefersDark);
   document.documentElement.classList.toggle("dark", isDark);
 };
 
@@ -24,7 +25,7 @@ export const useSettingsStore = defineStore("settings", () => {
     (value) => {
       applyAppearance(value);
     },
-    { immediate: true }
+    { immediate: true },
   );
 
   watch(preferredDark, () => {
@@ -33,6 +34,6 @@ export const useSettingsStore = defineStore("settings", () => {
 
   return {
     appearance,
-    resolvedDarkMode
+    resolvedDarkMode,
   };
 });

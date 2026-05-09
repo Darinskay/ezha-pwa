@@ -46,7 +46,7 @@ import {
 } from "@/features/add-log/log-meal-service";
 import { formatMacro } from "@/lib/macros";
 import { parseNumberInput } from "@/lib/number";
-import { queryKeys } from "@/query/keys";
+import { invalidateDailyDataQueries } from "@/query/invalidation";
 import { foodEntryRepository } from "@/repositories/food-entry-repository";
 import { savedFoodRepository } from "@/repositories/saved-food-repository";
 import { aiAnalysisService } from "@/services/ai-analysis-service";
@@ -703,14 +703,10 @@ const finishAndExit = async (
 ): Promise<void> => {
   await clearDraft(draftKey.value);
   activeDayStore.setActiveDate(activeLogDate.value);
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: queryKeys.daySummary }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.todaySummary }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.todayEntries }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.library }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.suggestionsContext }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.settingsTargets }),
-  ]);
+  await invalidateDailyDataQueries(queryClient, {
+    includeLibrary: true,
+    includeSettingsTargets: true,
+  });
 
   if (props.embedded) {
     emit("saved", nextRouteName);

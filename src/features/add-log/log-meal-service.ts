@@ -8,7 +8,7 @@ import type {
   MacroTotals,
   SavedFood,
   SavedMealIngredient,
-  SavedMealIngredientDraft
+  SavedMealIngredientDraft,
 } from "@/types/domain";
 
 export type LogMealItemOrigin = "ai" | "library_food" | "library_meal";
@@ -58,7 +58,7 @@ const zeroTotals = (): MacroTotals => ({
   calories: 0,
   protein: 0,
   carbs: 0,
-  fat: 0
+  fat: 0,
 });
 
 export const MAX_LOG_ITEM_GRAMS = 5000;
@@ -66,12 +66,15 @@ export const MAX_LOG_ITEM_GRAMS = 5000;
 const toPositiveNumberOr = (value: number | null, fallback: number): number =>
   value != null && Number.isFinite(value) && value > 0 ? value : fallback;
 
-const normalizeEstimateItems = (items: MacroItemEstimate[]): MacroItemEstimate[] =>
+const normalizeEstimateItems = (
+  items: MacroItemEstimate[],
+): MacroItemEstimate[] =>
   items
     .map((item) => ({ ...item, name: item.name.trim() }))
     .filter((item) => item.name.length > 0);
 
-const clampToRange = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
+const clampToRange = (value: number, min: number, max: number): number =>
+  Math.min(Math.max(value, min), max);
 
 export const normalizeLogItemGrams = (value: string): number | null => {
   const parsed = parseNumberInput(value);
@@ -100,31 +103,34 @@ export const macrosFromLogItem = (item: LogMealItem): MacroTotals => {
     return zeroTotals();
   }
 
-  const multiplier = item.macroBasis === "per_100g" ? grams / 100 : grams / toPositiveNumberOr(item.baseGrams, 1);
+  const multiplier =
+    item.macroBasis === "per_100g"
+      ? grams / 100
+      : grams / toPositiveNumberOr(item.baseGrams, 1);
 
   return {
     calories: item.baseCalories * multiplier,
     protein: item.baseProtein * multiplier,
     carbs: item.baseCarbs * multiplier,
-    fat: item.baseFat * multiplier
+    fat: item.baseFat * multiplier,
   };
 };
 
 export const totalsFromLogItems = (items: LogMealItem[]): MacroTotals =>
-  items.reduce(
-    (acc, item) => {
-      const macros = macrosFromLogItem(item);
-      return {
-        calories: acc.calories + macros.calories,
-        protein: acc.protein + macros.protein,
-        carbs: acc.carbs + macros.carbs,
-        fat: acc.fat + macros.fat
-      };
-    },
-    zeroTotals()
-  );
+  items.reduce((acc, item) => {
+    const macros = macrosFromLogItem(item);
+    return {
+      calories: acc.calories + macros.calories,
+      protein: acc.protein + macros.protein,
+      carbs: acc.carbs + macros.carbs,
+      fat: acc.fat + macros.fat,
+    };
+  }, zeroTotals());
 
-export const buildLogItemFromSavedFood = (food: SavedFood, grams = 100): LogMealItem => {
+export const buildLogItemFromSavedFood = (
+  food: SavedFood,
+  grams = 100,
+): LogMealItem => {
   const per100 = resolvedPer100g(food);
   return {
     id: crypto.randomUUID(),
@@ -140,24 +146,37 @@ export const buildLogItemFromSavedFood = (food: SavedFood, grams = 100): LogMeal
     linkedFoodId: food.id,
     aiConfidence: null,
     aiNotes: "Added from library food",
-    isNutritionMissing: false
+    isNutritionMissing: false,
   };
 };
 
-export const buildLogItemsFromSavedMeal = (ingredients: SavedMealIngredient[]): LogMealItem[] =>
+export const buildLogItemsFromSavedMeal = (
+  ingredients: SavedMealIngredient[],
+): LogMealItem[] =>
   ingredients.map((ingredient) => {
     const grams = toPositiveNumberOr(ingredient.grams, 0);
     const hasMissingNutrition =
       grams <= 0 ||
-      [ingredient.calories, ingredient.protein, ingredient.carbs, ingredient.fat].some(
-        (value) => !Number.isFinite(value)
-      );
+      [
+        ingredient.calories,
+        ingredient.protein,
+        ingredient.carbs,
+        ingredient.fat,
+      ].some((value) => !Number.isFinite(value));
     const per100Multiplier = hasMissingNutrition ? 0 : 100 / grams;
 
-    const safePer100Calories = hasMissingNutrition ? 0 : ingredient.calories * per100Multiplier;
-    const safePer100Protein = hasMissingNutrition ? 0 : ingredient.protein * per100Multiplier;
-    const safePer100Carbs = hasMissingNutrition ? 0 : ingredient.carbs * per100Multiplier;
-    const safePer100Fat = hasMissingNutrition ? 0 : ingredient.fat * per100Multiplier;
+    const safePer100Calories = hasMissingNutrition
+      ? 0
+      : ingredient.calories * per100Multiplier;
+    const safePer100Protein = hasMissingNutrition
+      ? 0
+      : ingredient.protein * per100Multiplier;
+    const safePer100Carbs = hasMissingNutrition
+      ? 0
+      : ingredient.carbs * per100Multiplier;
+    const safePer100Fat = hasMissingNutrition
+      ? 0
+      : ingredient.fat * per100Multiplier;
 
     return {
       id: crypto.randomUUID(),
@@ -165,7 +184,9 @@ export const buildLogItemsFromSavedMeal = (ingredients: SavedMealIngredient[]): 
       gramsText: formatMacro(grams, 1),
       macroBasis: "per_100g",
       baseGrams: 100,
-      baseCalories: Number.isFinite(safePer100Calories) ? safePer100Calories : 0,
+      baseCalories: Number.isFinite(safePer100Calories)
+        ? safePer100Calories
+        : 0,
       baseProtein: Number.isFinite(safePer100Protein) ? safePer100Protein : 0,
       baseCarbs: Number.isFinite(safePer100Carbs) ? safePer100Carbs : 0,
       baseFat: Number.isFinite(safePer100Fat) ? safePer100Fat : 0,
@@ -175,13 +196,13 @@ export const buildLogItemsFromSavedMeal = (ingredients: SavedMealIngredient[]): 
       aiNotes: hasMissingNutrition
         ? "[PLACEHOLDER] Missing nutrition fields in template item"
         : "Added from saved meal",
-      isNutritionMissing: hasMissingNutrition
+      isNutritionMissing: hasMissingNutrition,
     } satisfies LogMealItem;
   });
 
 export const buildLogItemsFromEstimate = (
   estimate: MacroEstimate,
-  fallbackName = "AI item"
+  fallbackName = "AI item",
 ): LogMealItem[] => {
   const normalizedItems = normalizeEstimateItems(estimate.items);
 
@@ -201,8 +222,8 @@ export const buildLogItemsFromEstimate = (
         linkedFoodId: null,
         aiConfidence: estimate.confidence ?? null,
         aiNotes: estimate.notes ?? "",
-        isNutritionMissing: false
-      }
+        isNutritionMissing: false,
+      },
     ];
   }
 
@@ -220,14 +241,14 @@ export const buildLogItemsFromEstimate = (
     linkedFoodId: null,
     aiConfidence: item.confidence ?? estimate.confidence ?? null,
     aiNotes: item.notes ?? estimate.notes ?? "",
-    isNutritionMissing: false
+    isNutritionMissing: false,
   }));
 };
 
 export const buildLabelLogItemsFromEstimate = (
   estimate: MacroEstimate,
   grams: number | null,
-  fallbackName = "Nutrition label"
+  fallbackName = "Nutrition label",
 ): LogMealItem[] => {
   const resolvedGrams = toPositiveNumberOr(grams, 100);
   const normalizedItems = normalizeEstimateItems(estimate.items);
@@ -248,8 +269,8 @@ export const buildLabelLogItemsFromEstimate = (
         linkedFoodId: null,
         aiConfidence: estimate.confidence ?? null,
         aiNotes: estimate.notes ?? "",
-        isNutritionMissing: false
-      }
+        isNutritionMissing: false,
+      },
     ];
   }
 
@@ -267,11 +288,14 @@ export const buildLabelLogItemsFromEstimate = (
     linkedFoodId: null,
     aiConfidence: item.confidence ?? estimate.confidence ?? null,
     aiNotes: item.notes ?? estimate.notes ?? "",
-    isNutritionMissing: false
+    isNutritionMissing: false,
   }));
 };
 
-export const scalePer100gMacros = (base: MacroTotals, grams: number | null): MacroTotals => {
+export const scalePer100gMacros = (
+  base: MacroTotals,
+  grams: number | null,
+): MacroTotals => {
   if (!grams || grams <= 0) {
     return base;
   }
@@ -280,11 +304,14 @@ export const scalePer100gMacros = (base: MacroTotals, grams: number | null): Mac
     calories: base.calories * multiplier,
     protein: base.protein * multiplier,
     carbs: base.carbs * multiplier,
-    fat: base.fat * multiplier
+    fat: base.fat * multiplier,
   };
 };
 
-export const normalizeScaledMacrosToPer100g = (display: MacroTotals, grams: number | null): MacroTotals => {
+export const normalizeScaledMacrosToPer100g = (
+  display: MacroTotals,
+  grams: number | null,
+): MacroTotals => {
   if (!grams || grams <= 0) {
     return display;
   }
@@ -296,14 +323,14 @@ export const normalizeScaledMacrosToPer100g = (display: MacroTotals, grams: numb
     calories: display.calories / multiplier,
     protein: display.protein / multiplier,
     carbs: display.carbs / multiplier,
-    fat: display.fat / multiplier
+    fat: display.fat / multiplier,
   };
 };
 
 export const applyEditedLabelMacrosToItem = (
   item: LogMealItem,
   editedDisplay: MacroTotals,
-  grams: number | null
+  grams: number | null,
 ): LogMealItem => {
   const per100 = normalizeScaledMacrosToPer100g(editedDisplay, grams);
   return {
@@ -314,14 +341,17 @@ export const applyEditedLabelMacrosToItem = (
     baseProtein: per100.protein,
     baseCarbs: per100.carbs,
     baseFat: per100.fat,
-    gramsText: formatMacro(grams && grams > 0 ? grams : parseLogItemGrams(item.gramsText) ?? 100, 1)
+    gramsText: formatMacro(
+      grams && grams > 0 ? grams : (parseLogItemGrams(item.gramsText) ?? 100),
+      1,
+    ),
   };
 };
 
 export const buildEntryItemsFromLogItems = (
   entryId: string,
   userId: string,
-  items: LogMealItem[]
+  items: LogMealItem[],
 ): FoodEntryItem[] => {
   const rows: FoodEntryItem[] = [];
 
@@ -345,14 +375,16 @@ export const buildEntryItemsFromLogItems = (
       fat: macros.fat,
       ai_confidence: item.aiConfidence,
       ai_notes: item.aiNotes,
-      created_at: null
+      created_at: null,
     });
   }
 
   return rows;
 };
 
-export const buildMealIngredientsFromLogItems = (items: LogMealItem[]): SavedMealIngredientDraft[] =>
+export const buildMealIngredientsFromLogItems = (
+  items: LogMealItem[],
+): SavedMealIngredientDraft[] =>
   items
     .map((item) => {
       const grams = parseLogItemGrams(item.gramsText);
@@ -369,12 +401,15 @@ export const buildMealIngredientsFromLogItems = (items: LogMealItem[]): SavedMea
         protein: macros.protein,
         carbs: macros.carbs,
         fat: macros.fat,
-        linked_food_id: item.linkedFoodId
+        linked_food_id: item.linkedFoodId,
       } satisfies SavedMealIngredientDraft;
     })
     .filter((item): item is SavedMealIngredientDraft => item !== null);
 
-export const resolveLogMealAnalyzeInputType = (hasPhoto: boolean, isLabelPhoto: boolean): LogMealAnalyzeInputType => {
+export const resolveLogMealAnalyzeInputType = (
+  hasPhoto: boolean,
+  isLabelPhoto: boolean,
+): LogMealAnalyzeInputType => {
   if (hasPhoto) {
     return isLabelPhoto ? "label_photo" : "food_photo";
   }
@@ -387,8 +422,14 @@ export const buildLogInputText = (items: FoodEntryItem[]): string => {
   return names.length > 0 ? names.join(", ") : "Meal";
 };
 
-export const buildFoodEntryPayload = (input: BuildFoodEntryPayloadInput): BuildFoodEntryPayloadResult => {
-  const entryItems = buildEntryItemsFromLogItems(input.entryId, input.userId, input.items);
+export const buildFoodEntryPayload = (
+  input: BuildFoodEntryPayloadInput,
+): BuildFoodEntryPayloadResult => {
+  const entryItems = buildEntryItemsFromLogItems(
+    input.entryId,
+    input.userId,
+    input.items,
+  );
   const totals = totalsFromLogItems(input.items);
   const source = resolveFoodEntryInput(input.sources, input.isLabelPhoto);
 
@@ -397,7 +438,8 @@ export const buildFoodEntryPayload = (input: BuildFoodEntryPayloadInput): BuildF
     .filter((value): value is number => value != null);
   const aiConfidence =
     confidenceValues.length > 0
-      ? confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length
+      ? confidenceValues.reduce((sum, value) => sum + value, 0) /
+        confidenceValues.length
       : null;
 
   return {
@@ -416,45 +458,45 @@ export const buildFoodEntryPayload = (input: BuildFoodEntryPayloadInput): BuildF
       ai_confidence: aiConfidence,
       ai_source: source.ai_source,
       ai_notes: "Logged from combined meal sources",
-      created_at: null
-    }
+      created_at: null,
+    },
   };
 };
 
 export const resolveFoodEntryInput = (
   sources: UsedMealSources,
-  isLabelPhoto: boolean
+  isLabelPhoto: boolean,
 ): Pick<FoodEntry, "input_type" | "ai_source"> => {
   if (sources.usedPhoto && sources.usedText) {
     return {
       input_type: "photo+text",
-      ai_source: isLabelPhoto ? "label_photo" : "food_photo"
+      ai_source: isLabelPhoto ? "label_photo" : "food_photo",
     };
   }
 
   if (sources.usedPhoto) {
     return {
       input_type: "photo",
-      ai_source: isLabelPhoto ? "label_photo" : "food_photo"
+      ai_source: isLabelPhoto ? "label_photo" : "food_photo",
     };
   }
 
   if (sources.usedText) {
     return {
       input_type: "text",
-      ai_source: "text"
+      ai_source: "text",
     };
   }
 
   if (sources.usedLibrary) {
     return {
       input_type: "text",
-      ai_source: "library"
+      ai_source: "library",
     };
   }
 
   return {
     input_type: "text",
-    ai_source: "unknown"
+    ai_source: "unknown",
   };
 };

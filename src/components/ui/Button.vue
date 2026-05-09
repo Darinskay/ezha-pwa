@@ -16,8 +16,8 @@ const props = withDefaults(
     size: "md",
     loading: false,
     disabled: false,
-    type: "button"
-  }
+    type: "button",
+  },
 );
 
 const classes = computed(() =>
@@ -36,8 +36,8 @@ const classes = computed(() =>
     props.size === "sm" && "h-[2.125rem] px-3 text-xs sm:h-9 sm:px-3.5",
     props.size === "md" && "h-10 px-3.5 sm:h-11 sm:px-4",
     props.size === "lg" && "h-11 px-4 text-sm sm:h-12 sm:px-5 sm:text-base",
-    props.class
-  )
+    props.class,
+  ),
 );
 </script>
 
@@ -63,8 +63,19 @@ const classes = computed(() =>
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.2" stroke-width="4" />
-      <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="4" />
+      <circle
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        stroke-opacity="0.2"
+        stroke-width="4"
+      />
+      <path
+        d="M22 12a10 10 0 0 0-10-10"
+        stroke="currentColor"
+        stroke-width="4"
+      />
     </svg>
     <slot />
   </button>
