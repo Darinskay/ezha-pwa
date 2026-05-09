@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
 import { parseDate, type DateValue } from "@internationalized/date";
 import {
   CalendarCell,
@@ -58,7 +58,7 @@ const selectedCalendarDate = computed(() =>
   dateKeyToCalendarDate(selectedDate.value),
 );
 const todayCalendarDate = computed(() => dateKeyToCalendarDate(todayKey.value));
-const calendarPlaceholder = ref<DateValue>(selectedCalendarDate.value);
+const calendarPlaceholder = shallowRef<DateValue>(selectedCalendarDate.value);
 
 watch(selectedCalendarDate, (date) => {
   calendarPlaceholder.value = date;
