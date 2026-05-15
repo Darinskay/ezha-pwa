@@ -1,3 +1,4 @@
+import { nowDateKey } from "@/lib/date";
 import { toMacroTotals } from "@/lib/macros";
 import { dailySummaryRepository } from "@/repositories/daily-summary-repository";
 import { dailyTargetRepository } from "@/repositories/daily-target-repository";
@@ -48,10 +49,12 @@ export const syncDailySummaryForDate = async (date: string): Promise<void> => {
     throw new Error("Unable to load profile.");
   }
 
+  const existingSummary = await dailySummaryRepository.fetchSummary(date);
+  const targetId = existingSummary?.daily_target_id ?? profile.active_target_id;
   const [entries, target] = await Promise.all([
     foodEntryRepository.fetchEntriesByDateKey(date),
-    profile.active_target_id
-      ? dailyTargetRepository.fetchTarget(profile.active_target_id)
+    targetId
+      ? dailyTargetRepository.fetchTarget(targetId)
       : Promise.resolve(null),
   ]);
 
@@ -63,4 +66,36 @@ export const syncDailySummaryForDate = async (date: string): Promise<void> => {
       target,
     }),
   );
+};
+
+export const applyDailyTargetForDate = async (
+  date: string,
+  targetId: string,
+): Promise<void> => {
+  const profile = await profileRepository.fetchProfile();
+  if (!profile) {
+    throw new Error("Unable to load profile.");
+  }
+
+  const [entries, target] = await Promise.all([
+    foodEntryRepository.fetchEntriesByDateKey(date),
+    dailyTargetRepository.fetchTarget(targetId),
+  ]);
+
+  if (!target) {
+    throw new Error("Unable to load target.");
+  }
+
+  await dailySummaryRepository.upsertSummary(
+    buildDailySummaryForDate({
+      date,
+      entries,
+      profile,
+      target,
+    }),
+  );
+
+  if (date === nowDateKey() && profile.active_target_id !== target.id) {
+    await profileRepository.updateActiveTarget(target.id);
+  }
 };

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
+import { useRouter } from "vue-router";
+import { ChevronDown, Target } from "lucide-vue-next";
 import Card from "@/components/ui/Card.vue";
 import MacroProgressTable from "@/components/MacroProgressTable.vue";
 import FoodEntryCard from "@/components/FoodEntryCard.vue";
@@ -8,14 +10,20 @@ import { EXAMPLE_TARGETS } from "@/lib/macros";
 import { foodEntryRepository } from "@/repositories/food-entry-repository";
 import { invalidateDailyDataQueries } from "@/query/invalidation";
 import { queryKeys } from "@/query/keys";
-import { syncDailySummaryForDate } from "@/services/day-summary-service";
+import {
+  applyDailyTargetForDate,
+  syncDailySummaryForDate,
+} from "@/services/day-summary-service";
 import { fetchDayBootstrap } from "@/services/profile-bootstrap";
 import { useActiveDayStore } from "@/stores/active-day-store";
+import TargetSelectorDialog from "@/features/today/TargetSelectorDialog.vue";
 
 const queryClient = useQueryClient();
+const router = useRouter();
 const activeDayStore = useActiveDayStore();
 
 const showDeleteToast = ref(false);
+const isTargetSelectorOpen = ref(false);
 let deleteToastTimer: ReturnType<typeof setTimeout> | null = null;
 
 const todaySummaryQuery = useQuery({
@@ -51,6 +59,21 @@ const entriesWithItems = computed(() => todayEntriesQuery.data.value ?? []);
 const entriesError = computed(
   () => (todayEntriesQuery.error.value as Error | null) ?? null,
 );
+const selectedTarget = computed(() => todayData.value?.activeTarget);
+const targetLabel = computed(
+  () => selectedTarget.value?.name ?? "Saved target",
+);
+const targetCalories = computed(() =>
+  Math.round(
+    selectedTarget.value?.calories_target ??
+      todayData.value?.targets.calories ??
+      0,
+  ),
+);
+const targetEyebrow = computed(() =>
+  activeDayStore.isToday ? "Today's target" : "Day target",
+);
+const hasLoggedEntries = computed(() => summaryEntries.value.length > 0);
 
 const deleteEntryMutation = useMutation({
   mutationFn: async (entryId: string) => {
@@ -67,6 +90,16 @@ const deleteEntryMutation = useMutation({
   },
 });
 
+const applyTargetMutation = useMutation({
+  mutationFn: async (targetId: string) => {
+    await applyDailyTargetForDate(activeDayStore.activeDate, targetId);
+  },
+  onSuccess: async () => {
+    isTargetSelectorOpen.value = false;
+    await invalidateDailyDataQueries(queryClient, { includeEntries: false });
+  },
+});
+
 const deleteEntry = async (entryId: string): Promise<void> => {
   const confirmed = window.confirm("Delete entry?");
   if (!confirmed) return;
@@ -77,8 +110,24 @@ const isSummaryPending = computed(() => todaySummaryQuery.isPending.value);
 const isEntriesPending = computed(
   () => todayEntriesQuery.isPending.value || todayEntriesQuery.isFetching.value,
 );
+const targetError = computed(
+  () => (applyTargetMutation.error.value as Error | null) ?? null,
+);
 const summarySkeletonCards = Array.from({ length: 4 }, (_, index) => index);
 const entrySkeletonRows = Array.from({ length: 2 }, (_, index) => index);
+
+const openTargetSelector = (): void => {
+  isTargetSelectorOpen.value = true;
+};
+
+const applyTarget = async (targetId: string): Promise<void> => {
+  await applyTargetMutation.mutateAsync(targetId);
+};
+
+const addTarget = async (): Promise<void> => {
+  isTargetSelectorOpen.value = false;
+  await router.push({ name: "settings" });
+};
 </script>
 
 <template>
@@ -100,13 +149,44 @@ const entrySkeletonRows = Array.from({ length: 2 }, (_, index) => index);
           </div>
         </div>
       </div>
-      <MacroProgressTable
-        v-else
-        :targets="todayData?.targets ?? EXAMPLE_TARGETS"
-        :eaten="
-          todayData?.totals ?? { calories: 0, protein: 0, carbs: 0, fat: 0 }
-        "
-      />
+      <template v-else>
+        <button
+          class="group flex w-full items-center justify-between gap-3 rounded-[1rem] border border-primary/20 bg-card/60 px-3 py-2.5 text-left shadow-[inset_0_1px_0_hsl(var(--glass-highlight)/0.45)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-card/78 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          type="button"
+          @click="openTargetSelector"
+        >
+          <div class="flex min-w-0 items-center gap-3">
+            <div
+              class="flex size-10 shrink-0 items-center justify-center rounded-[0.9rem] border border-primary/20 bg-primary/10 text-primary"
+            >
+              <Target class="size-5" />
+            </div>
+            <div class="min-w-0">
+              <p
+                class="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+              >
+                {{ targetEyebrow }}
+              </p>
+              <p class="truncate text-sm font-semibold text-foreground">
+                {{ targetLabel }} · {{ targetCalories }} kcal
+              </p>
+            </div>
+          </div>
+
+          <div
+            class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-muted-foreground transition-colors group-hover:text-foreground"
+          >
+            <ChevronDown class="size-4" />
+          </div>
+        </button>
+
+        <MacroProgressTable
+          :targets="todayData?.targets ?? EXAMPLE_TARGETS"
+          :eaten="
+            todayData?.totals ?? { calories: 0, protein: 0, carbs: 0, fat: 0 }
+          "
+        />
+      </template>
 
       <p
         v-if="todayError"
@@ -187,6 +267,18 @@ const entrySkeletonRows = Array.from({ length: 2 }, (_, index) => index);
         Entry deleted
       </div>
     </Transition>
+
+    <TargetSelectorDialog
+      v-if="isTargetSelectorOpen && todayData"
+      :targets="todayData.availableTargets"
+      :selected-target-id="todayData.activeTarget?.id"
+      :has-entries="hasLoggedEntries"
+      :loading="applyTargetMutation.isPending.value"
+      :error-message="targetError?.message"
+      @select="applyTarget"
+      @close="isTargetSelectorOpen = false"
+      @add-target="addTarget"
+    />
   </section>
 </template>
 

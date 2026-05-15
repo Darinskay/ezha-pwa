@@ -49,4 +49,21 @@ export const dailySummaryRepository = {
 
     return parseWithSchema(dailySummarySchema, data, "daily_summary");
   },
+
+  async fetchLatestTargetSummaryBefore(
+    date: string,
+  ): Promise<DailySummary | null> {
+    const { data, error } = await supabaseClient
+      .from("daily_summaries")
+      .select("*")
+      .lt("date", date)
+      .not("daily_target_id", "is", null)
+      .order("date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    ensureNoError(error);
+    if (!data) return null;
+    return parseWithSchema(dailySummarySchema, data, "daily_summary");
+  },
 };

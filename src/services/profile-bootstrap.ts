@@ -59,6 +59,65 @@ export const resolveActiveTarget = async (
   return fallback;
 };
 
+const targetFromSummary = (
+  summary: { daily_target_id?: string | null } | null,
+  targets: DailyTarget[],
+): DailyTarget | undefined => {
+  if (!summary?.daily_target_id) return undefined;
+  return targets.find((target) => target.id === summary.daily_target_id);
+};
+
+const macroTargetsFromTarget = (target: DailyTarget): MacroTargets => ({
+  calories: Math.round(target.calories_target),
+  protein: Math.round(target.protein_target),
+  carbs: Math.round(target.carbs_target),
+  fat: Math.round(target.fat_target),
+});
+
+const macroTargetsFromSummary = (summary: {
+  calories_target: number;
+  protein_target: number;
+  carbs_target: number;
+  fat_target: number;
+}): MacroTargets => ({
+  calories: Math.round(summary.calories_target),
+  protein: Math.round(summary.protein_target),
+  carbs: Math.round(summary.carbs_target),
+  fat: Math.round(summary.fat_target),
+});
+
+const resolveSelectedTarget = async (
+  selectedDate: string,
+  profile: Profile,
+  targets: DailyTarget[],
+  summary: Awaited<ReturnType<typeof dailySummaryRepository.fetchSummary>>,
+  fallbackTarget: DailyTarget | undefined,
+): Promise<DailyTarget | undefined> => {
+  const summaryTarget = targetFromSummary(summary, targets);
+  if (summaryTarget) {
+    return summaryTarget;
+  }
+
+  if (summary) {
+    return undefined;
+  }
+
+  const latestSummary =
+    await dailySummaryRepository.fetchLatestTargetSummaryBefore(selectedDate);
+  const latestTarget = targetFromSummary(latestSummary, targets);
+  if (latestTarget) {
+    if (
+      selectedDate === nowDateKey() &&
+      profile.active_target_id !== latestTarget.id
+    ) {
+      await profileRepository.updateActiveTarget(latestTarget.id);
+    }
+    return latestTarget;
+  }
+
+  return fallbackTarget;
+};
+
 export interface TodayBootstrap {
   activeDate: string;
   targets: MacroTargets;
@@ -83,27 +142,24 @@ export const fetchDayBootstrap = async (
   }
 
   const targets = await dailyTargetRepository.ensureTargets(profile, userId);
-  const activeTarget = await resolveActiveTarget(profile, targets);
+  const fallbackTarget = await resolveActiveTarget(profile, targets);
   const selectedDate = clampSelectableDate(dateKey, nowDateKey());
   const [summary, entries] = await Promise.all([
     dailySummaryRepository.fetchSummary(selectedDate),
     foodEntryRepository.fetchEntriesByDateKey(selectedDate),
   ]);
+  const activeTarget = await resolveSelectedTarget(
+    selectedDate,
+    profile,
+    targets,
+    summary,
+    fallbackTarget,
+  );
 
   const resolvedTargets: MacroTargets = summary
-    ? {
-        calories: Math.round(summary.calories_target),
-        protein: Math.round(summary.protein_target),
-        carbs: Math.round(summary.carbs_target),
-        fat: Math.round(summary.fat_target),
-      }
+    ? macroTargetsFromSummary(summary)
     : activeTarget
-      ? {
-          calories: Math.round(activeTarget.calories_target),
-          protein: Math.round(activeTarget.protein_target),
-          carbs: Math.round(activeTarget.carbs_target),
-          fat: Math.round(activeTarget.fat_target),
-        }
+      ? macroTargetsFromTarget(activeTarget)
       : EXAMPLE_TARGETS;
 
   return {
