@@ -20,7 +20,7 @@ const classes = computed(() =>
       "border-transparent bg-secondary text-secondary-foreground",
     props.variant === "outline" && "border text-foreground",
     props.variant === "warning" &&
-      "border-transparent bg-amber-100 text-amber-900 dark:bg-amber-900/50 dark:text-amber-100",
+      "border-transparent bg-primary/10 text-primary",
     props.class,
   ),
 );

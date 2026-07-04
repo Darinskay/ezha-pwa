@@ -143,8 +143,6 @@ const toggleFavorite = (foodId: string): void => {
   writeIdArrayToStorage(LIBRARY_FAVORITES_KEY, favoriteFoodIds.value);
 };
 
-const selectedCount = computed(() => selectedFoodIds.value.length);
-
 const filteredFoods = computed(() => {
   const foods = foodsQuery.data.value ?? [];
   const search = searchText.value.trim().toLowerCase();
@@ -188,6 +186,20 @@ const canSaveMeal = computed(() =>
       (ingredient) => (parseNumberInput(ingredient.gramsText) ?? 0) > 0,
     ),
   ),
+);
+
+const selectedLibraryCount = computed(
+  () => selectedFoodIds.value.length + selectedMealIds.value.length,
+);
+
+const hasSelectedMealLoading = computed(() =>
+  selectedMealIds.value.some((mealId) => isMealLoading(mealId)),
+);
+
+const canConfirmLibrarySelection = computed(
+  () =>
+    !hasSelectedMealLoading.value &&
+    (selectedFoodIds.value.length > 0 || canSaveMeal.value),
 );
 
 const toggleMealSelection = async (mealId: string): Promise<void> => {
@@ -318,20 +330,9 @@ const returnToAddLog = async (): Promise<void> => {
   });
 };
 
-// --- Confirm: foods ---
-const confirmFoodSelection = async (): Promise<void> => {
-  if (selectedFoodIds.value.length === 0) {
-    return;
-  }
-
+const buildSelectedFoodLogItems = (): LogMealItem[] => {
   const foods = foodsQuery.data.value ?? [];
-  const draft = await loadDraft<AddLogDraftSnapshot>(LOG_MODE_DRAFT_KEY);
-  const currentLogItems = Array.isArray(draft?.logItems) ? draft.logItems : [];
-  const nonLibraryItems = currentLogItems.filter(
-    (item) => item.origin !== "library_food" && item.origin !== "library_meal",
-  );
-
-  const selectedLogItems = selectedFoodIds.value
+  return selectedFoodIds.value
     .map((foodId) => {
       const food = foods.find((candidate) => candidate.id === foodId);
       if (!food) return null;
@@ -342,27 +343,24 @@ const confirmFoodSelection = async (): Promise<void> => {
       return buildLogItemFromSavedFood(food, grams);
     })
     .filter((item): item is LogMealItem => !!item);
-
-  const nextDraft: AddLogDraftSnapshot = {
-    ...draft,
-    pendingLibrarySelectReturn: true,
-    usedLibrarySource: selectedLogItems.length > 0,
-    logItems: [...nonLibraryItems, ...selectedLogItems],
-  };
-
-  await saveDraft(LOG_MODE_DRAFT_KEY, nextDraft);
-  pushRecentFoodIds(selectedFoodIds.value);
-  await returnToAddLog();
 };
 
-// --- Confirm: meals ---
-const confirmMealSelection = async (): Promise<void> => {
-  if (selectedMealIds.value.length === 0) return;
-
-  const logItems = selectedMealIds.value
+const buildSelectedMealLogItems = (): LogMealItem[] => {
+  return selectedMealIds.value
     .flatMap((mealId) => mealIngredientsByMealId.value[mealId] ?? [])
     .map(buildLogItemFromEditableIngredient)
     .filter((item): item is LogMealItem => item !== null);
+};
+
+// --- Confirm: foods + meals ---
+const confirmLibrarySelection = async (): Promise<void> => {
+  if (!canConfirmLibrarySelection.value) return;
+
+  const logItems = [
+    ...buildSelectedFoodLogItems(),
+    ...buildSelectedMealLogItems(),
+  ];
+  if (logItems.length === 0) return;
 
   const draft = await loadDraft<AddLogDraftSnapshot>(LOG_MODE_DRAFT_KEY);
   const currentLogItems = Array.isArray(draft?.logItems) ? draft.logItems : [];
@@ -378,6 +376,9 @@ const confirmMealSelection = async (): Promise<void> => {
   };
 
   await saveDraft(LOG_MODE_DRAFT_KEY, nextDraft);
+  if (selectedFoodIds.value.length > 0) {
+    pushRecentFoodIds(selectedFoodIds.value);
+  }
   await returnToAddLog();
 };
 
@@ -387,13 +388,13 @@ void preselectFromDraft();
 
 const selectorClass = computed(() =>
   props.embedded
-    ? "h-[90vh] w-full max-w-none overflow-y-auto rounded-t-[1.2rem] rounded-b-none border border-border/80 bg-card p-3 shadow-[0_-10px_34px_hsl(var(--glass-shadow)/0.28)] sm:max-w-2xl sm:rounded-[1.4rem] sm:p-5 space-y-3 sm:space-y-4"
+    ? "glass h-[90vh] w-full max-w-none overflow-y-auto rounded-t-card rounded-b-none p-3 sm:max-w-2xl sm:rounded-card sm:p-5 space-y-3 sm:space-y-4"
     : "app-page feature feature-add-log pb-28",
 );
 const selectorActionBarClass = computed(() =>
   props.embedded
-    ? "sticky bottom-0 z-20 rounded-2xl border border-border/70 bg-card/95 p-3 backdrop-blur"
-    : "fixed inset-x-0 bottom-0 z-20 border-t border-border/70 bg-card/95 px-4 py-3 backdrop-blur sm:left-auto sm:right-auto sm:w-full sm:max-w-screen-sm sm:rounded-t-2xl",
+    ? "glass sticky bottom-0 z-20 rounded-card p-3"
+    : "glass fixed inset-x-3 bottom-3 z-20 rounded-full px-4 py-3 sm:left-auto sm:right-auto sm:w-full sm:max-w-screen-sm",
 );
 </script>
 
@@ -410,13 +411,13 @@ const selectorActionBarClass = computed(() =>
     <Card class="glass space-y-3 p-3 sm:p-5">
       <!-- Tab buttons -->
       <div
-        class="flex gap-1 rounded-xl border border-border/60 bg-muted/30 p-1"
+        class="flex gap-1 rounded-full border border-white/50 bg-white/30 p-1 dark:border-border/20 dark:bg-card/25"
       >
         <button
           class="flex-1 rounded-lg py-1.5 text-sm font-semibold transition-all"
           :class="
             activeTab === 'foods'
-              ? 'bg-card shadow text-foreground'
+              ? 'bg-white/70 shadow text-foreground dark:bg-card/60'
               : 'text-muted-foreground hover:text-foreground'
           "
           @click="activeTab = 'foods'"
@@ -427,7 +428,7 @@ const selectorActionBarClass = computed(() =>
           class="flex-1 rounded-lg py-1.5 text-sm font-semibold transition-all"
           :class="
             activeTab === 'meals'
-              ? 'bg-card shadow text-foreground'
+              ? 'bg-white/70 shadow text-foreground dark:bg-card/60'
               : 'text-muted-foreground hover:text-foreground'
           "
           @click="activeTab = 'meals'"
@@ -490,7 +491,7 @@ const selectorActionBarClass = computed(() =>
         <article
           v-for="food in filteredFoods"
           :key="food.id"
-          class="cursor-pointer space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3"
+          class="glass cursor-pointer space-y-2 rounded-card p-3"
           role="button"
           tabindex="0"
           @click="toggleSelected(food.id)"
@@ -498,15 +499,16 @@ const selectorActionBarClass = computed(() =>
           @keydown.space.prevent="toggleSelected(food.id)"
         >
           <div class="flex items-start justify-between gap-2">
-            <label class="flex items-start gap-3">
+            <div class="flex min-w-0 flex-1 items-start gap-3">
               <input
-                class="mt-1 size-4 rounded border-border accent-primary"
+                class="mt-1 size-4 shrink-0 rounded border-border accent-primary"
                 type="checkbox"
                 :checked="isSelected(food.id)"
+                :aria-label="`Select ${food.name}`"
                 @click.stop
                 @change="onSelectionChange(food.id, $event)"
               />
-              <div>
+              <div class="min-w-0">
                 <p class="text-sm font-semibold">{{ food.name }}</p>
                 <p class="text-xs text-muted-foreground">
                   {{ formatMacro(food.calories_per_100g, 1) }} kcal/100g · P{{
@@ -517,7 +519,7 @@ const selectorActionBarClass = computed(() =>
                   }}
                 </p>
               </div>
-            </label>
+            </div>
 
             <Button
               variant="ghost"
@@ -575,7 +577,7 @@ const selectorActionBarClass = computed(() =>
         <article
           v-for="meal in filteredMeals"
           :key="meal.id"
-          class="rounded-2xl border bg-card/70 overflow-hidden"
+          class="glass overflow-hidden rounded-card"
           :class="
             isMealSelected(meal.id)
               ? 'border-[hsl(var(--feature-primary)/0.5)]'
@@ -694,14 +696,10 @@ const selectorActionBarClass = computed(() =>
       <div class="mx-auto grid max-w-screen-sm grid-cols-2 gap-2">
         <Button variant="ghost" @click="returnToAddLog">Cancel</Button>
         <Button
-          v-if="activeTab === 'foods'"
-          :disabled="selectedCount === 0"
-          @click="confirmFoodSelection"
+          :disabled="!canConfirmLibrarySelection"
+          @click="confirmLibrarySelection"
         >
-          Add Selected ({{ selectedCount }})
-        </Button>
-        <Button v-else :disabled="!canSaveMeal" @click="confirmMealSelection">
-          Add Selected ({{ selectedMealIds.length }})
+          Add Selected ({{ selectedLibraryCount }})
         </Button>
       </div>
     </div>

@@ -240,7 +240,7 @@ const refreshContext = async (): Promise<void> => {
           contextData.targets.carbs === 0 &&
           contextData.targets.fat === 0
         "
-        class="rounded-xl border border-border/80 bg-background/80 px-3 py-2 text-sm text-muted-foreground"
+        class="rounded-thumb border border-white/50 bg-white/40 px-3 py-2 text-sm text-muted-foreground dark:border-border/20 dark:bg-card/30"
       >
         Set your daily targets in Settings for better suggestions.
       </p>
@@ -266,7 +266,7 @@ const refreshContext = async (): Promise<void> => {
 
     <div
       v-if="!suggestions.length && !fetchSuggestionsMutation.isPending.value"
-      class="rounded-2xl border border-dashed border-border/80 p-4 space-y-2"
+      class="glass space-y-2 rounded-card border-dashed p-4"
     >
       <p class="text-sm font-medium">How to get suggestions</p>
       <ul class="space-y-1 text-xs text-muted-foreground">
@@ -388,7 +388,7 @@ const refreshContext = async (): Promise<void> => {
         <div class="flex items-start justify-between gap-3">
           <h3 class="text-base font-semibold">{{ suggestion.title }}</h3>
           <span
-            class="rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground"
+            class="rounded-full bg-track/10 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground"
           >
             {{ suggestion.calories }} kcal
           </span>
@@ -397,7 +397,7 @@ const refreshContext = async (): Promise<void> => {
           {{ suggestion.description }}
         </p>
         <p
-          class="rounded-xl border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground"
+          class="rounded-thumb border border-white/50 bg-white/40 px-3 py-2 text-xs font-semibold text-muted-foreground dark:border-border/20 dark:bg-card/30"
         >
           P{{ suggestion.protein }}g · C{{ suggestion.carbs }}g · F{{
             suggestion.fat

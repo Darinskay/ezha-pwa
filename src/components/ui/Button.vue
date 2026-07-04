@@ -26,13 +26,13 @@ const classes = computed(() =>
     "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     "disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none active:scale-[0.99]",
     props.variant === "default" &&
-      "text-white shadow-[0_12px_30px_hsl(var(--feature-primary)/0.34)] hover:brightness-105",
+      "rounded-full text-white shadow-[0_14px_34px_hsl(var(--primary)/0.32)] hover:brightness-105",
     props.variant === "secondary" &&
       "border text-foreground hover:brightness-[1.03]",
     props.variant === "ghost" && "text-foreground hover:bg-muted/60",
     props.variant === "destructive" &&
       "bg-destructive text-destructive-foreground shadow-[0_12px_24px_hsl(var(--destructive)/0.22)] hover:brightness-110",
-    props.variant === "outline" && "border bg-card/66 hover:bg-card/85",
+    props.variant === "outline" && "border glass hover:brightness-[1.03]",
     props.size === "sm" && "h-[2.125rem] px-3 text-xs sm:h-9 sm:px-3.5",
     props.size === "md" && "h-10 px-3.5 sm:h-11 sm:px-4",
     props.size === "lg" && "h-11 px-4 text-sm sm:h-12 sm:px-5 sm:text-base",
@@ -48,11 +48,11 @@ const classes = computed(() =>
     :disabled="disabled || loading"
     :style="
       variant === 'default'
-        ? 'background: linear-gradient(142deg, hsl(var(--feature-primary)), hsl(var(--feature-secondary)));'
+        ? 'background: linear-gradient(142deg, hsl(var(--primary)), hsl(var(--secondary)));'
         : variant === 'secondary'
-          ? 'border-color: hsl(var(--feature-primary) / 0.24); background: linear-gradient(160deg, hsl(var(--feature-soft) / 0.8), hsl(var(--card) / 0.88));'
-          : variant === 'outline'
-            ? 'border-color: hsl(var(--feature-primary) / 0.22);'
+          ? 'border-color: hsl(var(--primary) / 0.24); background: linear-gradient(160deg, hsl(var(--feature-soft) / 0.72), hsl(var(--card) / 0.72));'
+        : variant === 'outline'
+            ? 'border-color: hsl(var(--border) / 0.86);'
             : ''
     "
   >

@@ -6,7 +6,37 @@
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#8b4de7" />
+    <meta
+      name="theme-color"
+      content="#F7F1F9"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#09050F"
+      media="(prefers-color-scheme: dark)"
+    />
+    <script>
+      (() => {
+        try {
+          let appearance = localStorage.getItem("appAppearance") || "system";
+          if (appearance.startsWith('"')) {
+            appearance = JSON.parse(appearance);
+          }
+
+          const prefersDark = window.matchMedia(
+            "(prefers-color-scheme: dark)",
+          ).matches;
+          const isDark =
+            appearance === "dark" ||
+            (appearance === "system" && prefersDark);
+
+          document.documentElement.classList.toggle("dark", isDark);
+        } catch {
+          document.documentElement.classList.remove("dark");
+        }
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>EZHA</title>
   </head>

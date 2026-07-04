@@ -14,11 +14,14 @@ export default {
         "primary-foreground": "hsl(var(--primary-foreground))",
         secondary: "hsl(var(--secondary))",
         "secondary-foreground": "hsl(var(--secondary-foreground))",
+        accent: "hsl(var(--accent))",
+        "accent-foreground": "hsl(var(--accent-foreground))",
         muted: "hsl(var(--muted))",
         "muted-foreground": "hsl(var(--muted-foreground))",
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+        track: "hsl(var(--track))",
         destructive: "hsl(var(--destructive))",
         "destructive-foreground": "hsl(var(--destructive-foreground))",
       },
@@ -26,6 +29,8 @@ export default {
         lg: "0.9rem",
         md: "calc(0.9rem - 2px)",
         sm: "calc(0.9rem - 4px)",
+        card: "1.375rem",
+        thumb: "0.9375rem",
       },
       fontFamily: {
         sans: [
@@ -52,6 +57,7 @@ export default {
       },
       boxShadow: {
         card: "0 8px 30px rgb(0 0 0 / 0.06)",
+        glass: "0 22px 70px rgb(47 21 74 / 0.22)",
       },
     },
   },

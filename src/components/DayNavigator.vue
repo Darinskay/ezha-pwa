@@ -96,7 +96,7 @@ const goNext = (): void => {
     <div class="relative h-10 w-full">
       <div class="absolute left-1/2 top-0 -translate-x-1/2">
         <div
-          class="grid grid-cols-[2.55rem_8.4rem_2.55rem] items-center rounded-[1rem] border border-border/50 bg-muted/60 p-0.5 shadow-[0_10px_26px_hsl(var(--glass-shadow)/0.1)] backdrop-blur-xl dark:border-white/5 dark:bg-white/8"
+          class="glass grid grid-cols-[2.55rem_8.4rem_2.55rem] items-center rounded-full p-0.5"
         >
           <Button
             aria-label="Previous day"
@@ -111,7 +111,7 @@ const goNext = (): void => {
             <PopoverTrigger as-child>
               <button
                 aria-label="Select day"
-                class="group relative flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-[0.85rem] bg-card/82 px-2.5 text-[13px] font-bold uppercase tracking-[0.12em] text-foreground shadow-[inset_0_1px_0_hsl(var(--glass-highlight)/0.5),0_8px_18px_hsl(var(--glass-shadow)/0.1)] transition-all duration-200 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.99] dark:bg-white/12 dark:shadow-[inset_0_1px_0_hsl(var(--glass-highlight)/0.12)] dark:hover:bg-white/16"
+                class="group relative flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-full bg-white/50 px-2.5 text-[13px] font-bold uppercase tracking-[0.12em] text-foreground shadow-[inset_0_1px_0_hsl(var(--glass-highlight)/0.5),0_8px_18px_hsl(var(--glass-shadow)/0.1)] transition-all duration-200 hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.99] dark:bg-card/40 dark:shadow-[inset_0_1px_0_hsl(var(--glass-highlight)/0.12)] dark:hover:bg-card/50"
                 type="button"
               >
                 <CalendarDays class="size-3.5 shrink-0 opacity-70" />
@@ -125,7 +125,7 @@ const goNext = (): void => {
             <PopoverPortal>
               <PopoverContent
                 align="center"
-                class="z-50 w-[min(calc(100vw-1.5rem),20rem)] rounded-[1.2rem] border border-border/55 bg-card/95 p-3 shadow-[0_22px_54px_hsl(var(--glass-shadow)/0.2),inset_0_1px_0_hsl(var(--glass-highlight)/0.62)] backdrop-blur-2xl dark:border-white/10 dark:bg-card/95 dark:shadow-[0_22px_54px_hsl(var(--glass-shadow)/0.58),inset_0_1px_0_hsl(var(--glass-highlight)/0.12)]"
+                class="glass z-50 w-[min(calc(100vw-1.5rem),20rem)] rounded-card p-3"
                 :collision-padding="16"
                 side="bottom"
                 :side-offset="10"
@@ -149,7 +149,7 @@ const goNext = (): void => {
                       class="flex items-center justify-between gap-3"
                     >
                       <CalendarPrev
-                        class="flex size-9 items-center justify-center rounded-xl text-foreground/78 transition-colors hover:bg-muted/70 disabled:pointer-events-none disabled:opacity-35 dark:hover:bg-white/10"
+                        class="flex size-9 items-center justify-center rounded-full text-foreground/78 transition-colors hover:bg-track/10 disabled:pointer-events-none disabled:opacity-35"
                       >
                         <ChevronLeft class="size-4 stroke-[3]" />
                       </CalendarPrev>
@@ -162,7 +162,7 @@ const goNext = (): void => {
                       </CalendarHeading>
 
                       <CalendarNext
-                        class="flex size-9 items-center justify-center rounded-xl text-foreground/78 transition-colors hover:bg-muted/70 disabled:pointer-events-none disabled:opacity-35 dark:hover:bg-white/10"
+                        class="flex size-9 items-center justify-center rounded-full text-foreground/78 transition-colors hover:bg-track/10 disabled:pointer-events-none disabled:opacity-35"
                       >
                         <ChevronRight class="size-4 stroke-[3]" />
                       </CalendarNext>
@@ -197,7 +197,7 @@ const goNext = (): void => {
                             :date="day"
                           >
                             <CalendarCellTrigger
-                              class="mx-auto flex size-9 items-center justify-center rounded-xl text-[13px] font-semibold text-foreground/80 transition-all duration-150 hover:bg-muted/70 data-[disabled]:pointer-events-none data-[disabled]:opacity-30 data-[outside-view]:text-muted-foreground/30 data-[selected]:bg-primary data-[selected]:text-primary-foreground data-[selected]:shadow-[0_10px_20px_hsl(var(--feature-primary)/0.26)] data-[today]:ring-1 data-[today]:ring-primary/30 dark:hover:bg-white/10"
+                              class="mx-auto flex size-9 items-center justify-center rounded-full text-[13px] font-semibold text-foreground/80 transition-all duration-150 hover:bg-track/10 data-[disabled]:pointer-events-none data-[disabled]:opacity-30 data-[outside-view]:text-muted-foreground/30 data-[selected]:bg-primary data-[selected]:text-primary-foreground data-[selected]:shadow-[0_10px_20px_hsl(var(--feature-primary)/0.26)] data-[today]:ring-1 data-[today]:ring-primary/30"
                               :day="day"
                               :month="month.value"
                             />
@@ -221,7 +221,7 @@ const goNext = (): void => {
 
           <Button
             aria-label="Next day"
-            class="h-9 rounded-[0.85rem] px-0 text-foreground/85 hover:text-foreground disabled:text-muted-foreground/45"
+            class="h-9 rounded-[0.85rem] px-0 text-foreground/85 hover:text-foreground disabled:text-muted-foreground/50"
             variant="ghost"
             :disabled="isToday"
             @click="goNext"

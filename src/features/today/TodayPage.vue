@@ -132,7 +132,7 @@ const addTarget = async (): Promise<void> => {
 
 <template>
   <section class="app-page feature feature-today">
-    <Card class="glass space-y-3 p-3 sm:p-5">
+    <Card class="space-y-4 rounded-[1.75rem] p-3 sm:p-5">
       <div v-if="isSummaryPending" class="space-y-3">
         <div class="space-y-4">
           <div
@@ -151,13 +151,13 @@ const addTarget = async (): Promise<void> => {
       </div>
       <template v-else>
         <button
-          class="group flex w-full items-center justify-between gap-3 rounded-[1rem] border border-primary/20 bg-card/60 px-3 py-2.5 text-left shadow-[inset_0_1px_0_hsl(var(--glass-highlight)/0.45)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-card/78 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          class="group flex w-full items-center justify-between gap-3 rounded-card border border-white/70 bg-white/40 px-3 py-2.5 text-left shadow-[inset_0_1px_0_rgb(255_255_255_/_0.5)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:border-border/20 dark:bg-card/40 dark:hover:bg-card/50"
           type="button"
           @click="openTargetSelector"
         >
           <div class="flex min-w-0 items-center gap-3">
             <div
-              class="flex size-10 shrink-0 items-center justify-center rounded-[0.9rem] border border-primary/20 bg-primary/10 text-primary"
+              class="flex size-10 shrink-0 items-center justify-center rounded-thumb border border-primary/20 bg-primary/10 text-primary"
             >
               <Target class="size-5" />
             </div>
@@ -174,7 +174,7 @@ const addTarget = async (): Promise<void> => {
           </div>
 
           <div
-            class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-muted-foreground transition-colors group-hover:text-foreground"
+            class="flex size-8 shrink-0 items-center justify-center rounded-full bg-track/10 text-muted-foreground transition-colors group-hover:text-foreground"
           >
             <ChevronDown class="size-4" />
           </div>
@@ -208,7 +208,7 @@ const addTarget = async (): Promise<void> => {
         <div
           v-for="row in entrySkeletonRows"
           :key="row"
-          class="rounded-2xl border border-border/70 bg-card/70 p-3 sm:p-5"
+          class="glass rounded-card border p-3 sm:p-5"
         >
           <div class="space-y-3">
             <div class="flex items-start justify-between gap-3">

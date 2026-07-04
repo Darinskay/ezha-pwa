@@ -49,7 +49,7 @@ const confirmTarget = (): void => {
 <template>
   <div class="dialog-overlay feature feature-today">
     <Card
-      class="target-sheet w-full max-w-none space-y-4 rounded-b-none rounded-t-[1.2rem] border-border/80 bg-card/96 p-3 sm:max-w-lg sm:rounded-[1.4rem] sm:p-5"
+      class="target-sheet w-full max-w-none space-y-4 rounded-b-none rounded-t-card p-3 sm:max-w-lg sm:rounded-card sm:p-5"
     >
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0 space-y-1">
@@ -74,7 +74,7 @@ const confirmTarget = (): void => {
 
       <div
         v-if="pendingTarget"
-        class="space-y-4 rounded-[1.1rem] border border-primary/20 bg-primary/10 p-3"
+        class="space-y-4 rounded-card border border-primary/20 bg-primary/10 p-3"
       >
         <div class="space-y-1">
           <h4 class="font-semibold">Change to {{ pendingTarget.name }}?</h4>
@@ -102,11 +102,11 @@ const confirmTarget = (): void => {
         <button
           v-for="target in targets"
           :key="target.id"
-          class="group flex w-full items-center justify-between gap-3 rounded-[1rem] border p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-card/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          class="group flex w-full items-center justify-between gap-3 rounded-thumb border p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:hover:bg-card/50"
           :class="
             target.id === selectedTargetId
-              ? 'border-primary/35 bg-primary/10 shadow-[0_10px_26px_hsl(var(--feature-primary)/0.14)]'
-              : 'border-border/70 bg-card/68'
+              ? 'border-primary/30 bg-primary/10 shadow-[0_10px_26px_hsl(var(--feature-primary)/0.14)]'
+              : 'border-white/50 bg-white/30 dark:border-border/20 dark:bg-card/25'
           "
           type="button"
           @click="chooseTarget(target)"
@@ -133,7 +133,7 @@ const confirmTarget = (): void => {
           </div>
 
           <div
-            class="flex size-8 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/50 text-muted-foreground transition-colors group-hover:text-foreground"
+            class="flex size-8 shrink-0 items-center justify-center rounded-full border border-white/50 bg-white/30 text-muted-foreground transition-colors group-hover:text-foreground dark:border-border/20 dark:bg-card/30"
           >
             <Check
               v-if="target.id === selectedTargetId"
@@ -152,7 +152,7 @@ const confirmTarget = (): void => {
       </p>
 
       <button
-        class="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-primary/35 bg-primary/5 px-3 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        class="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-primary/30 bg-primary/5 px-3 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         type="button"
         @click="emit('addTarget')"
       >

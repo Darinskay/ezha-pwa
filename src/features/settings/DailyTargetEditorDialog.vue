@@ -61,7 +61,7 @@ const save = (): void => {
 <template>
   <div class="dialog-overlay feature feature-settings">
     <Card
-      class="w-full max-w-none rounded-t-[1.2rem] rounded-b-none space-y-4 border-border/80 bg-card/96 p-3 sm:max-w-lg sm:rounded-[1.4rem] sm:p-5"
+      class="w-full max-w-none space-y-4 rounded-t-card rounded-b-none p-3 sm:max-w-lg sm:rounded-card sm:p-5"
     >
       <div class="flex items-center justify-between">
         <h3 class="text-lg font-semibold">

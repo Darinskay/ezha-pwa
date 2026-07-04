@@ -152,7 +152,7 @@ const sortedTargets = computed(() => targetsQuery.data.value ?? []);
         <article
           v-for="target in sortedTargets"
           :key="target.id"
-          class="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/70 p-3 sm:flex-row sm:items-center sm:justify-between"
+          class="glass flex flex-col gap-3 rounded-card p-3 sm:flex-row sm:items-center sm:justify-between"
         >
           <div>
             <h3 class="font-semibold">{{ target.name }}</h3>

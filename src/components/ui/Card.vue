@@ -8,7 +8,7 @@ defineProps<{ class?: string }>();
   <section
     :class="
       cn(
-        'glass rounded-[1.1rem] text-card-foreground sm:rounded-[1.4rem]',
+        'glass rounded-card text-card-foreground',
         $props.class,
       )
     "

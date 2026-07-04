@@ -31,7 +31,7 @@ const onInput = (event: Event): void => {
     :placeholder="placeholder"
     :class="
       cn(
-        'flex min-h-[88px] w-full rounded-xl border px-3 py-2 text-[14px] transition-all duration-200 sm:min-h-[108px] sm:rounded-2xl sm:px-3.5 sm:py-2.5 sm:text-sm',
+        'flex min-h-[88px] w-full rounded-xl border px-3 py-2 text-[14px] text-foreground transition-all duration-200 sm:min-h-[108px] sm:rounded-2xl sm:px-3.5 sm:py-2.5 sm:text-sm',
         'placeholder:text-muted-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         $props.class,
       )

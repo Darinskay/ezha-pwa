@@ -4,9 +4,12 @@ import { useRouter } from "vue-router";
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import Input from "@/components/ui/Input.vue";
+import SelectField from "@/components/ui/SelectField.vue";
 import { useAuthStore } from "@/stores/auth-store";
+import { useSettingsStore } from "@/stores/settings-store";
 
 const authStore = useAuthStore();
+const settingsStore = useSettingsStore();
 const router = useRouter();
 
 const email = ref("");
@@ -102,6 +105,19 @@ const continueWithGoogle = async (): Promise<void> => {
       >
         Continue with Google
       </Button>
+
+      <div class="mt-4 space-y-1.5 border-t border-border/40 pt-4">
+        <label
+          class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+          for="auth-appearance"
+          >Appearance</label
+        >
+        <SelectField id="auth-appearance" v-model="settingsStore.appearance">
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </SelectField>
+      </div>
     </Card>
   </div>
 </template>

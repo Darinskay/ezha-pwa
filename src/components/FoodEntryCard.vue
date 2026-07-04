@@ -51,15 +51,18 @@ const createdLabel = computed(() => {
 const descriptionLabel = computed(() =>
   [
     createdLabel.value,
-    `${Math.round(props.entryWithItems.entry.calories)} kcal`,
-    `P ${Math.round(props.entryWithItems.entry.protein)}g`,
-    `C ${Math.round(props.entryWithItems.entry.carbs)}g`,
-    `F ${Math.round(props.entryWithItems.entry.fat)}g`,
     sourceLabel.value,
     confidenceLabel.value,
   ]
     .filter(Boolean)
     .join(" · "),
+);
+
+const macroLine = computed(
+  () =>
+    `P ${Math.round(props.entryWithItems.entry.protein)}g · C ${Math.round(
+      props.entryWithItems.entry.carbs,
+    )}g · F ${Math.round(props.entryWithItems.entry.fat)}g`,
 );
 
 const handleDelete = (): void => {
@@ -73,32 +76,25 @@ const toggleExpanded = (): void => {
 </script>
 
 <template>
-  <article
-    class="rounded-[1.05rem] border p-2.5 sm:rounded-[1.15rem] sm:p-3"
-    style="
-      border-color: hsl(var(--feature-primary) / 0.2);
-      background: linear-gradient(
-        158deg,
-        hsl(var(--card) / 0.86),
-        hsl(var(--card) / 0.7)
-      );
-    "
-  >
+  <article class="glass rounded-thumb p-2.5 sm:p-3">
     <div class="flex min-h-12 items-center gap-3">
       <button
         v-if="showExpand && entryWithItems.items.length > 0"
-        class="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 py-1.5 text-left transition-colors hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        class="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 py-1.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         type="button"
         :aria-expanded="expanded"
         :aria-label="`${expanded ? 'Hide' : 'Show'} details for ${title}`"
         @click="toggleExpanded"
       >
         <span class="min-w-0 flex-1">
-          <h4 class="truncate text-sm font-semibold leading-5 sm:text-[15px]">
+          <h4 class="truncate text-[13.5px] font-bold leading-5">
             {{ title }}
           </h4>
-          <p class="truncate text-xs leading-4 text-muted-foreground">
+          <p class="truncate text-[10.5px] font-semibold leading-4 text-muted-foreground">
             {{ descriptionLabel }}
+          </p>
+          <p class="truncate text-[10.5px] font-semibold leading-4 text-muted-foreground">
+            {{ macroLine }}
           </p>
         </span>
         <ChevronDown
@@ -109,11 +105,23 @@ const toggleExpanded = (): void => {
       </button>
 
       <div v-else class="min-w-0 flex-1 px-1.5 py-1.5">
-        <h4 class="truncate text-sm font-semibold leading-5 sm:text-[15px]">
+        <h4 class="truncate text-[13.5px] font-bold leading-5">
           {{ title }}
         </h4>
-        <p class="truncate text-xs leading-4 text-muted-foreground">
+        <p class="truncate text-[10.5px] font-semibold leading-4 text-muted-foreground">
           {{ descriptionLabel }}
+        </p>
+        <p class="truncate text-[10.5px] font-semibold leading-4 text-muted-foreground">
+          {{ macroLine }}
+        </p>
+      </div>
+
+      <div class="shrink-0 text-right">
+        <p class="text-sm font-extrabold leading-none">
+          {{ Math.round(entryWithItems.entry.calories) }}
+        </p>
+        <p class="mt-0.5 text-[10px] font-semibold text-muted-foreground">
+          kcal
         </p>
       </div>
 
@@ -138,11 +146,7 @@ const toggleExpanded = (): void => {
       <li
         v-for="item in entryWithItems.items"
         :key="item.id"
-        class="rounded-xl border px-3 py-2 text-sm"
-        style="
-          border-color: hsl(var(--feature-primary) / 0.16);
-          background: hsl(var(--feature-soft) / 0.4);
-        "
+        class="rounded-thumb border border-white/50 bg-white/40 px-3 py-2 text-sm dark:border-border/20 dark:bg-card/30"
       >
         <div class="flex items-center justify-between">
           <span class="font-medium">{{ item.name }}</span>

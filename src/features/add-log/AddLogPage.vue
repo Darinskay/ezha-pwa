@@ -145,7 +145,7 @@ const activeLogDate = computed(() => {
 });
 const pageClass = computed(() =>
   props.embedded
-    ? "h-[90vh] w-full max-w-none overflow-y-auto rounded-t-[1.2rem] rounded-b-none border border-border/80 bg-card p-3 shadow-[0_-10px_34px_hsl(var(--glass-shadow)/0.28)] sm:max-w-2xl sm:rounded-[1.4rem] sm:p-5 space-y-3 sm:space-y-4"
+    ? "glass h-[90vh] w-full max-w-none overflow-y-auto rounded-t-card rounded-b-none p-3 sm:max-w-2xl sm:rounded-card sm:p-5 space-y-3 sm:space-y-4"
     : "app-page feature feature-add-log",
 );
 const pageTitle = computed(() =>
@@ -1367,7 +1367,7 @@ onUnmounted(() => {
 
           <p
             v-if="manualPerServingPreview && manualUnitType === 'per_serving'"
-            class="rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+            class="rounded-thumb border border-white/50 bg-white/40 px-3 py-2 text-xs text-muted-foreground dark:border-border/20 dark:bg-card/30"
           >
             Per serving:
             {{ formatMacro(manualPerServingPreview.calories, 1) }} kcal · P{{
@@ -1418,7 +1418,7 @@ onUnmounted(() => {
           <article
             v-for="item in items"
             :key="item.id"
-            class="grid grid-cols-12 gap-2 rounded-xl border border-border/70 bg-background/80 p-2"
+            class="grid grid-cols-12 gap-2 rounded-thumb border border-white/50 bg-white/40 p-2 dark:border-border/20 dark:bg-card/30"
           >
             <Input
               v-model="item.name"
@@ -1494,7 +1494,7 @@ onUnmounted(() => {
           v-else
           type="file"
           accept="image/*"
-          class="block w-full rounded-xl border border-border/70 bg-background/80 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-primary-foreground"
+          class="block w-full rounded-thumb border border-white/60 bg-white/50 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-primary-foreground dark:border-border/20 dark:bg-card/30"
           @change="onFilePicked"
         />
         <img
@@ -1587,7 +1587,7 @@ onUnmounted(() => {
         <article
           v-for="item in logItems"
           :key="item.id"
-          class="space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3"
+          class="glass space-y-2 rounded-card p-3"
         >
           <div class="flex items-start justify-between gap-2">
             <h4 class="text-sm font-semibold">{{ item.name }}</h4>
@@ -1632,7 +1632,7 @@ onUnmounted(() => {
               </div>
             </div>
             <p
-              class="rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+              class="rounded-thumb border border-white/50 bg-white/40 px-3 py-2 text-xs text-muted-foreground dark:border-border/20 dark:bg-card/30"
             >
               {{ formatMacro(macrosFromLogItem(item).calories, 1) }} kcal · P{{
                 formatMacro(macrosFromLogItem(item).protein, 1)
@@ -1644,14 +1644,14 @@ onUnmounted(() => {
           </div>
           <p
             v-if="item.isNutritionMissing"
-            class="rounded-xl border border-amber-300/40 bg-amber-100/40 px-3 py-2 text-xs text-amber-700"
+            class="rounded-thumb border border-primary/20 bg-primary/10 px-3 py-2 text-xs text-primary"
           >
             [PLACEHOLDER] Missing nutrition fields for this template item. It is
             blocked from save.
           </p>
         </article>
 
-        <div class="rounded-xl border border-border/70 bg-muted/40 p-3 text-sm">
+        <div class="rounded-thumb border border-white/50 bg-white/40 p-3 text-sm dark:border-border/20 dark:bg-card/30">
           Total: {{ formatMacro(logTotals.calories, 1) }} kcal · P{{
             formatMacro(logTotals.protein, 1)
           }}g · C{{ formatMacro(logTotals.carbs, 1) }}g · F{{
@@ -1725,7 +1725,7 @@ onUnmounted(() => {
         </div>
 
         <div
-          class="sticky bottom-2 grid grid-cols-1 gap-2 rounded-2xl border border-border/70 bg-card/95 p-3 backdrop-blur sm:grid-cols-2"
+          class="glass sticky bottom-2 grid grid-cols-1 gap-2 rounded-card p-3 sm:grid-cols-2"
         >
           <Button variant="ghost" @click="clearMealDraft">Cancel</Button>
           <Button
@@ -1767,7 +1767,7 @@ onUnmounted(() => {
 
     <div v-if="pendingDuplicate" class="dialog-overlay feature feature-add-log">
       <Card
-        class="w-full max-w-none rounded-t-[1.2rem] rounded-b-none space-y-4 border-border/80 bg-card/96 p-3 sm:max-w-md sm:rounded-[1.4rem] sm:p-5"
+        class="w-full max-w-none space-y-4 rounded-t-card rounded-b-none p-3 sm:max-w-md sm:rounded-card sm:p-5"
       >
         <h3 class="text-lg font-semibold">Food already exists</h3>
         <p class="text-sm text-muted-foreground">

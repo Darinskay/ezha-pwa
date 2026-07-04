@@ -288,7 +288,7 @@ const save = async (): Promise<void> => {
 <template>
   <div class="dialog-overlay feature feature-library">
     <Card
-      class="max-h-[88vh] w-full max-w-none rounded-t-[1.2rem] rounded-b-none overflow-y-auto border-border/80 bg-card/96 p-3 sm:max-h-[92vh] sm:max-w-2xl sm:rounded-[1.4rem] sm:p-5"
+      class="max-h-[88vh] w-full max-w-none overflow-y-auto rounded-t-card rounded-b-none p-3 sm:max-h-[92vh] sm:max-w-2xl sm:rounded-card sm:p-5"
     >
       <div class="mb-4 flex items-center justify-between">
         <div>
@@ -310,7 +310,7 @@ const save = async (): Promise<void> => {
           <article
             v-for="ingredient in ingredients"
             :key="ingredient.id"
-            class="space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3"
+            class="glass space-y-2 rounded-card p-3"
           >
             <div class="flex items-start justify-between gap-2">
               <h4 class="text-sm font-semibold">{{ ingredient.name }}</h4>
@@ -330,7 +330,7 @@ const save = async (): Promise<void> => {
                 placeholder="Grams"
               />
               <p
-                class="rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+                class="rounded-thumb border border-white/50 bg-white/40 px-3 py-2 text-xs text-muted-foreground dark:border-border/20 dark:bg-card/30"
               >
                 {{ Math.round(buildScaledMacros(ingredient).calories) }} kcal ·
                 P{{ Math.round(buildScaledMacros(ingredient).protein) }} · C{{
@@ -343,7 +343,7 @@ const save = async (): Promise<void> => {
         </div>
 
         <div
-          class="mt-4 space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3"
+          class="glass mt-4 space-y-2 rounded-card p-3"
         >
           <h4 class="text-sm font-semibold">Add ingredient</h4>
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -368,7 +368,7 @@ const save = async (): Promise<void> => {
         </div>
 
         <div
-          class="mt-4 rounded-xl border border-border/70 bg-muted/40 p-3 text-sm"
+          class="mt-4 rounded-thumb border border-white/50 bg-white/40 p-3 text-sm dark:border-border/20 dark:bg-card/30"
         >
           Total: {{ formatMacro(totals.calories, 1) }} kcal · P{{
             formatMacro(totals.protein, 1)

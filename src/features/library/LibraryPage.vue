@@ -205,34 +205,26 @@ const foodDescription = (food: SavedFood): string => {
         No saved foods.
       </div>
 
-      <div v-else class="space-y-1">
+      <div v-else class="space-y-2">
         <article
           v-for="food in visibleFoods"
           :key="food.id"
-          class="rounded-[1.05rem] border p-2.5 sm:rounded-[1.15rem] sm:p-3"
-          style="
-            border-color: hsl(var(--feature-primary) / 0.2);
-            background: linear-gradient(
-              158deg,
-              hsl(var(--card) / 0.86),
-              hsl(var(--card) / 0.7)
-            );
-          "
+          class="glass rounded-thumb p-2.5 sm:p-3"
         >
           <div class="flex min-h-12 items-center gap-3">
             <button
-              class="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 py-1.5 text-left transition-colors hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              class="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 py-1.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               type="button"
               :aria-label="`Open ${food.name}`"
               @click="openFood(food)"
             >
               <span class="min-w-0 flex-1">
                 <h3
-                  class="truncate text-sm font-semibold leading-5 sm:text-[15px]"
+                  class="truncate text-[13.5px] font-bold leading-5"
                 >
                   {{ food.name }}
                 </h3>
-                <p class="truncate text-xs leading-4 text-muted-foreground">
+                <p class="truncate text-[10.5px] font-semibold leading-4 text-muted-foreground">
                   {{ foodDescription(food) }}
                 </p>
               </span>

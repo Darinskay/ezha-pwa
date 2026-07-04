@@ -91,16 +91,10 @@ const returnToLogDialog = (): void => {
     >
       <div class="pointer-events-auto mx-auto max-w-5xl">
         <div
-          class="overflow-visible rounded-[1.3rem] border p-1 backdrop-blur-2xl sm:rounded-[1.55rem] sm:p-1.5"
+          class="glass overflow-visible rounded-full p-1 sm:p-1.5"
           style="
-            border-color: hsl(var(--feature-primary) / 0.24);
-            background: linear-gradient(
-              165deg,
-              hsl(var(--card) / 0.9),
-              hsl(var(--card) / 0.78)
-            );
             box-shadow:
-              0 -6px 36px hsl(var(--glass-shadow) / 0.2),
+              0 18px 54px hsl(var(--glass-shadow) / 0.22),
               inset 0 1px 0 hsl(var(--glass-highlight) / 0.48);
           "
         >
@@ -109,13 +103,18 @@ const returnToLogDialog = (): void => {
               v-for="tab in leftTabs"
               :key="tab.name"
               :aria-label="tab.label"
-              class="group relative z-10 flex min-h-12 flex-col items-center justify-center gap-1 rounded-[calc(1.3rem-0.25rem)] px-0.5 py-0 text-[10px] font-semibold transition-all duration-300 sm:min-h-14 sm:rounded-[calc(1.55rem-0.375rem)] sm:px-1 sm:py-0 sm:text-[11px]"
+              class="group relative z-10 flex min-h-12 flex-col items-center justify-center gap-1 rounded-full px-0.5 py-0 text-[10px] font-semibold transition-all duration-300 sm:min-h-14 sm:px-1 sm:py-0 sm:text-[11px]"
               :class="
                 cn(
                   route.name === tab.name
-                    ? 'bg-secondary text-primary shadow-[0_10px_24px_hsl(var(--glass-shadow)/0.18)]'
+                    ? 'text-white shadow-[0_10px_24px_hsl(var(--primary)/0.22)]'
                     : 'text-muted-foreground hover:text-foreground',
                 )
+              "
+              :style="
+                route.name === tab.name
+                  ? 'background: linear-gradient(142deg, hsl(var(--primary)), hsl(var(--secondary)));'
+                  : ''
               "
               @click="navigate(tab.name)"
             >
@@ -127,7 +126,7 @@ const returnToLogDialog = (): void => {
 
             <button
               aria-label="Log a new meal"
-              class="group relative z-20 mx-auto -mt-5 flex size-16 items-center justify-center rounded-[1.35rem] border text-white shadow-[0_16px_38px_hsl(var(--feature-primary)/0.42)] transition-all duration-300 hover:-translate-y-0.5 hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.98] sm:size-[4.35rem] sm:rounded-[1.55rem]"
+              class="group relative z-20 mx-auto -mt-5 flex size-16 items-center justify-center rounded-full border text-white shadow-[0_16px_38px_hsl(var(--primary)/0.42)] transition-all duration-300 hover:-translate-y-0.5 hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.98] sm:size-[4.35rem]"
               style="
                 border-color: hsl(var(--glass-highlight) / 0.54);
                 background:
@@ -138,8 +137,8 @@ const returnToLogDialog = (): void => {
                   ),
                   linear-gradient(
                     142deg,
-                    hsl(var(--feature-primary)),
-                    hsl(var(--feature-secondary))
+                    hsl(var(--primary)),
+                    hsl(var(--secondary))
                   );
               "
               @click="openLogDialog"
@@ -151,13 +150,18 @@ const returnToLogDialog = (): void => {
               v-for="tab in rightTabs"
               :key="tab.name"
               :aria-label="tab.label"
-              class="group relative z-10 flex min-h-12 flex-col items-center justify-center gap-1 rounded-[calc(1.3rem-0.25rem)] px-0.5 py-0 text-[10px] font-semibold transition-all duration-300 sm:min-h-14 sm:rounded-[calc(1.55rem-0.375rem)] sm:px-1 sm:py-0 sm:text-[11px]"
+              class="group relative z-10 flex min-h-12 flex-col items-center justify-center gap-1 rounded-full px-0.5 py-0 text-[10px] font-semibold transition-all duration-300 sm:min-h-14 sm:px-1 sm:py-0 sm:text-[11px]"
               :class="
                 cn(
                   route.name === tab.name
-                    ? 'bg-secondary text-primary shadow-[0_10px_24px_hsl(var(--glass-shadow)/0.18)]'
+                    ? 'text-white shadow-[0_10px_24px_hsl(var(--primary)/0.22)]'
                     : 'text-muted-foreground hover:text-foreground',
                 )
+              "
+              :style="
+                route.name === tab.name
+                  ? 'background: linear-gradient(142deg, hsl(var(--primary)), hsl(var(--secondary)));'
+                  : ''
               "
               @click="navigate(tab.name)"
             >

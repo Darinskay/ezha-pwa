@@ -3,49 +3,68 @@
 @tailwind utilities;
 
 :root {
-  --background: 240 43% 99%;
-  --foreground: 248 24% 18%;
+  --background: 300 33% 96%;
+  --foreground: 264 29% 16%;
   --card: 0 0% 100%;
-  --card-foreground: 248 24% 18%;
-  --primary: 258 62% 62%;
+  --card-foreground: 264 29% 16%;
+  --primary: 325 70% 51%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 235 45% 97%;
-  --secondary-foreground: 248 24% 20%;
-  --muted: 232 30% 96%;
-  --muted-foreground: 241 11% 43%;
-  --border: 236 24% 86%;
-  --input: 236 24% 86%;
-  --ring: 258 62% 62%;
+  --secondary: 244 76% 61%;
+  --secondary-foreground: 0 0% 100%;
+  --accent: 22 100% 65%;
+  --accent-foreground: 264 29% 16%;
+  --muted: 288 34% 92%;
+  --muted-foreground: 268 18% 45%;
+  --border: 0 0% 100%;
+  --input: 276 28% 72%;
+  --ring: 325 70% 51%;
+  --track: 264 88% 24%;
   --destructive: 356 83% 57%;
   --destructive-foreground: 0 0% 98%;
 
-  --feature-primary: 258 62% 62%;
-  --feature-secondary: 228 72% 68%;
-  --feature-soft: 238 78% 97%;
-  --feature-soft-strong: 236 52% 92%;
+  --feature-primary: 325 70% 51%;
+  --feature-secondary: 244 76% 61%;
+  --feature-soft: 300 48% 96%;
+  --feature-soft-strong: 289 43% 90%;
   --glass-highlight: 0 0% 100%;
-  --glass-shadow: 244 28% 18%;
+  --glass-shadow: 270 56% 19%;
+  --app-canvas: 300 33% 96%;
+  --app-glow-1: 22 100% 65%;
+  --app-glow-2: 244 76% 61%;
+  --app-glow-3: 325 70% 51%;
 }
 
 .dark {
-  --background: 240 22% 10%;
-  --foreground: 236 42% 95%;
-  --card: 241 20% 14%;
-  --card-foreground: 236 42% 95%;
-  --primary: 258 66% 68%;
-  --primary-foreground: 246 36% 12%;
-  --secondary: 240 16% 21%;
-  --secondary-foreground: 236 42% 95%;
-  --muted: 239 14% 20%;
-  --muted-foreground: 239 16% 78%;
-  --border: 240 13% 31%;
-  --input: 240 13% 31%;
-  --ring: 258 66% 68%;
+  color-scheme: dark;
+  --background: 264 48% 4%;
+  --foreground: 260 45% 96%;
+  --card: 264 38% 10%;
+  --card-foreground: 260 45% 96%;
+  --primary: 326 100% 62%;
+  --primary-foreground: 264 48% 4%;
+  --secondary: 258 100% 71%;
+  --secondary-foreground: 264 48% 4%;
+  --accent: 253 100% 86%;
+  --accent-foreground: 264 48% 4%;
+  --muted: 264 24% 15%;
+  --muted-foreground: 260 24% 76%;
+  --border: 260 28% 26%;
+  --input: 258 34% 42%;
+  --ring: 326 100% 62%;
+  --track: 253 100% 86%;
   --destructive: 356 73% 53%;
   --destructive-foreground: 0 0% 98%;
 
-  --glass-highlight: 241 20% 78%;
-  --glass-shadow: 240 32% 5%;
+  --feature-primary: 326 100% 62%;
+  --feature-secondary: 258 100% 71%;
+  --feature-soft: 264 34% 12%;
+  --feature-soft-strong: 263 32% 17%;
+  --glass-highlight: 253 100% 86%;
+  --glass-shadow: 264 45% 2%;
+  --app-canvas: 264 48% 4%;
+  --app-glow-1: 258 100% 71%;
+  --app-glow-2: 326 100% 62%;
+  --app-glow-3: 264 48% 4%;
 }
 
 * {
@@ -61,47 +80,72 @@ body,
 body {
   @apply font-sans text-foreground antialiased;
   margin: 0;
-  background-color: hsl(var(--background));
-  background-image:
-    radial-gradient(
-      circle at 0% 0%,
-      hsl(var(--feature-primary) / 0.07),
-      transparent 32%
-    ),
-    radial-gradient(
-      circle at 100% 0%,
-      hsl(var(--feature-secondary) / 0.08),
-      transparent 28%
-    ),
-    radial-gradient(
-      circle at 10% 100%,
-      hsl(var(--feature-secondary) / 0.05),
-      transparent 30%
-    ),
-    linear-gradient(180deg, hsl(var(--background)), hsl(var(--background)));
-  transition:
-    background-image 0.45s ease,
-    background-color 0.45s ease;
+  background: hsl(var(--background));
+  transition: background-color 0.45s ease;
 }
 
-.dark body {
+.app-background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: hsl(var(--app-canvas));
   background-image:
     radial-gradient(
-      circle at 0% 0%,
-      hsl(var(--feature-primary) / 0.2),
-      transparent 35%
+      circle 100vw at 15% 16%,
+      hsl(var(--app-glow-1) / 0.3),
+      transparent 48%
     ),
     radial-gradient(
-      circle at 100% 0%,
-      hsl(var(--feature-secondary) / 0.16),
-      transparent 32%
+      circle 90vw at 82% 12%,
+      hsl(var(--app-glow-2) / 0.24),
+      transparent 48%
     ),
     radial-gradient(
-      circle at 10% 100%,
-      hsl(var(--feature-secondary) / 0.12),
-      transparent 36%
+      circle 92vw at 58% 84%,
+      hsl(var(--app-glow-3) / 0.28),
+      transparent 48%
     ),
-    linear-gradient(180deg, hsl(var(--background)), hsl(var(--background)));
+    linear-gradient(
+      160deg,
+      hsl(var(--app-canvas)) 0%,
+      hsl(var(--app-canvas)) 100%
+    );
+  transition:
+    background-color 0.45s ease,
+    background-image 0.45s ease;
+}
+
+.dark .app-background {
+  background-color: hsl(var(--app-canvas));
+  background-image:
+    radial-gradient(
+      circle 68vw at 88% 2%,
+      hsl(var(--app-glow-1) / 0.12),
+      transparent 42%
+    ),
+    radial-gradient(
+      circle 72vw at 8% 58%,
+      hsl(var(--app-glow-2) / 0.1),
+      transparent 45%
+    ),
+    linear-gradient(
+      180deg,
+      hsl(var(--app-canvas)) 0%,
+      hsl(264 42% 6%) 52%,
+      hsl(var(--app-canvas)) 100%
+    );
+}
+
+input,
+select,
+textarea {
+  border-color: hsl(var(--input));
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  border-color: hsl(var(--input));
 }
 
 ::selection {
@@ -126,108 +170,88 @@ body {
 
 .app-root {
   position: relative;
+  z-index: 1;
   min-height: 100vh;
   isolation: isolate;
 }
 
-.app-root::before {
-  content: "";
-  position: fixed;
-  inset: -35% -8% auto;
-  z-index: -1;
-  height: 55vh;
-  background:
-    radial-gradient(
-      circle at 12% 35%,
-      hsl(var(--feature-primary) / 0.14),
-      transparent 54%
-    ),
-    radial-gradient(
-      circle at 82% 42%,
-      hsl(var(--feature-secondary) / 0.12),
-      transparent 58%
-    );
-  filter: blur(56px);
-  pointer-events: none;
-}
-
 .feature {
-  --feature-primary: 258 62% 62%;
-  --feature-secondary: 228 72% 68%;
-  --feature-soft: 238 78% 97%;
-  --feature-soft-strong: 236 52% 92%;
+  --feature-primary: var(--primary);
+  --feature-secondary: var(--secondary);
+  --feature-soft: 300 48% 96%;
+  --feature-soft-strong: 289 43% 90%;
 }
 
 .feature-auth {
-  --feature-primary: 258 62% 62%;
-  --feature-secondary: 228 72% 68%;
-  --feature-soft: 238 78% 97%;
-  --feature-soft-strong: 236 52% 92%;
+  --feature-primary: var(--primary);
+  --feature-secondary: var(--secondary);
+  --feature-soft: 300 48% 96%;
+  --feature-soft-strong: 289 43% 90%;
 }
 
 .feature-today {
-  --feature-primary: 258 62% 62%;
-  --feature-secondary: 228 72% 68%;
-  --feature-soft: 238 78% 97%;
-  --feature-soft-strong: 236 52% 92%;
+  --feature-primary: var(--primary);
+  --feature-secondary: var(--secondary);
+  --feature-soft: 300 48% 96%;
+  --feature-soft-strong: 289 43% 90%;
 }
 
 .feature-suggestions {
-  --feature-primary: 258 62% 62%;
-  --feature-secondary: 228 72% 68%;
-  --feature-soft: 238 78% 97%;
-  --feature-soft-strong: 236 52% 92%;
+  --feature-primary: var(--primary);
+  --feature-secondary: var(--secondary);
+  --feature-soft: 300 48% 96%;
+  --feature-soft-strong: 289 43% 90%;
 }
 
 .feature-add-log {
-  --feature-primary: 258 62% 62%;
-  --feature-secondary: 228 72% 68%;
-  --feature-soft: 238 78% 97%;
-  --feature-soft-strong: 236 52% 92%;
+  --feature-primary: var(--primary);
+  --feature-secondary: var(--secondary);
+  --feature-soft: 300 48% 96%;
+  --feature-soft-strong: 289 43% 90%;
 }
 
 .feature-library {
-  --feature-primary: 258 62% 62%;
-  --feature-secondary: 228 72% 68%;
-  --feature-soft: 238 78% 97%;
-  --feature-soft-strong: 236 52% 92%;
+  --feature-primary: var(--primary);
+  --feature-secondary: var(--secondary);
+  --feature-soft: 300 48% 96%;
+  --feature-soft-strong: 289 43% 90%;
 }
 
 .feature-settings {
-  --feature-primary: 258 62% 62%;
-  --feature-secondary: 228 72% 68%;
-  --feature-soft: 238 78% 97%;
-  --feature-soft-strong: 236 52% 92%;
+  --feature-primary: var(--primary);
+  --feature-secondary: var(--secondary);
+  --feature-soft: 300 48% 96%;
+  --feature-soft-strong: 289 43% 90%;
 }
 
 .dark .feature-auth {
-  --feature-soft: 243 24% 19%;
-  --feature-soft-strong: 242 24% 24%;
+  --feature-soft: 264 34% 12%;
+  --feature-soft-strong: 263 32% 17%;
 }
 
 .dark .feature-today {
-  --feature-soft: 243 24% 19%;
-  --feature-soft-strong: 242 24% 24%;
+  --feature-soft: 264 34% 12%;
+  --feature-soft-strong: 263 32% 17%;
 }
 
 .dark .feature-suggestions {
-  --feature-soft: 243 24% 19%;
-  --feature-soft-strong: 242 24% 24%;
+  --feature-soft: 264 34% 12%;
+  --feature-soft-strong: 263 32% 17%;
 }
 
 .dark .feature-add-log {
-  --feature-soft: 243 24% 19%;
-  --feature-soft-strong: 242 24% 24%;
+  --feature-soft: 264 34% 12%;
+  --feature-soft-strong: 263 32% 17%;
 }
 
 .dark .feature-library {
-  --feature-soft: 243 24% 19%;
-  --feature-soft-strong: 242 24% 24%;
+  --feature-soft: 264 34% 12%;
+  --feature-soft-strong: 263 32% 17%;
 }
 
 .dark .feature-settings {
-  --feature-soft: 243 24% 19%;
-  --feature-soft-strong: 242 24% 24%;
+  --feature-soft: 264 34% 12%;
+  --feature-soft-strong: 263 32% 17%;
 }
 
 @keyframes page-enter {
@@ -276,30 +300,43 @@ body {
   }
 
   .glass {
+    background-color: rgb(255 255 255 / 0.76);
     background-image: linear-gradient(
       155deg,
-      hsl(var(--glass-highlight) / 0.72),
-      hsl(var(--card) / 0.54) 42%,
-      hsl(var(--card) / 0.7)
+      rgb(255 255 255 / 0.82),
+      rgb(255 255 255 / 0.56) 48%,
+      rgb(255 255 255 / 0.7)
     );
-    border: 1px solid hsl(var(--feature-primary) / 0.19);
+    border: 1px solid rgb(255 255 255 / 0.85);
     box-shadow:
-      0 16px 38px hsl(var(--glass-shadow) / 0.12),
-      inset 0 1px 0 hsl(var(--glass-highlight) / 0.56);
-    backdrop-filter: blur(18px) saturate(145%);
+      0 22px 70px hsl(var(--glass-shadow) / 0.18),
+      inset 0 1px 0 rgb(255 255 255 / 0.78);
+    -webkit-backdrop-filter: blur(20px) saturate(145%);
+    backdrop-filter: blur(20px) saturate(145%);
   }
 
   .dark .glass {
+    background-color: hsl(var(--card) / 0.84);
     background-image: linear-gradient(
-      155deg,
-      hsl(var(--card) / 0.98),
-      hsl(var(--card) / 0.92) 42%,
-      hsl(var(--card) / 0.88)
+      158deg,
+      hsl(var(--primary) / 0.08),
+      hsl(var(--secondary) / 0.035) 48%,
+      hsl(var(--background) / 0.64)
     );
-    border-color: hsl(var(--feature-primary) / 0.3);
+    border-color: hsl(var(--border) / 0.86);
     box-shadow:
-      0 16px 34px hsl(var(--glass-shadow) / 0.5),
-      inset 0 1px 0 hsl(var(--glass-highlight) / 0.14);
+      0 24px 70px hsl(var(--glass-shadow) / 0.62),
+      inset 0 1px 0 hsl(var(--glass-highlight) / 0.1);
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass {
+      background-color: rgb(255 255 255 / 0.93);
+    }
+
+    .dark .glass {
+      background-color: hsl(var(--card) / 0.96);
+    }
   }
 
   .soft-divider {
@@ -315,11 +352,11 @@ body {
   }
 
   .stack-section-meta {
-    @apply rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground;
+    @apply rounded-full bg-track/10 px-2.5 py-1 text-xs font-semibold text-muted-foreground;
   }
 
   .stack-section-state {
-    @apply rounded-xl border p-6 text-center text-sm;
+    @apply glass rounded-card border p-6 text-center text-sm;
   }
 
   .stack-section-state-dashed {
