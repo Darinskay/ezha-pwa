@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import Button from "@/components/ui/Button.vue";
+import DialogSheet from "@/components/ui/DialogSheet.vue";
 import Card from "@/components/ui/Card.vue";
 import Input from "@/components/ui/Input.vue";
 import SelectField from "@/components/ui/SelectField.vue";
@@ -11,6 +12,7 @@ import type { SavedFood, SavedFoodDraft } from "@/types/domain";
 const props = defineProps<{
   food?: SavedFood;
   saving?: boolean;
+  saveError?: string;
 }>();
 
 const emit = defineEmits<{
@@ -125,15 +127,21 @@ const save = (): void => {
 </script>
 
 <template>
-  <div class="dialog-overlay feature feature-library">
+  <DialogSheet title="Edit food" :busy="saving" @close="emit('close')">
     <Card
-      class="w-full max-w-none space-y-4 rounded-t-card rounded-b-none p-3 sm:max-w-xl sm:rounded-card sm:p-5"
+      class="feature feature-library max-h-[90dvh] overflow-y-auto w-full max-w-none space-y-4 rounded-t-card rounded-b-none p-3 sm:max-w-xl sm:rounded-card sm:p-5"
     >
       <div class="flex items-center justify-between">
         <h3 class="text-lg font-semibold">
           {{ food ? "Edit Food" : "Add Food" }}
         </h3>
-        <Button variant="ghost" size="sm" @click="emit('close')">Close</Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          :disabled="saving"
+          @click="emit('close')"
+          >Close</Button
+        >
       </div>
 
       <div class="space-y-2">
@@ -175,6 +183,7 @@ const save = (): void => {
         </div>
       </div>
 
+      <p class="text-sm font-medium">Nutrition per 100 g</p>
       <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div class="space-y-1">
           <label
@@ -219,16 +228,19 @@ const save = (): void => {
       </p>
 
       <p
-        v-if="errorMessage"
+        v-if="errorMessage || saveError"
+        role="alert"
         class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
       >
-        {{ errorMessage }}
+        {{ errorMessage || saveError }}
       </p>
 
       <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Button :loading="saving" @click="save">Save</Button>
-        <Button variant="ghost" @click="emit('close')">Cancel</Button>
+        <Button variant="ghost" :disabled="saving" @click="emit('close')"
+          >Cancel</Button
+        >
       </div>
     </Card>
-  </div>
+  </DialogSheet>
 </template>

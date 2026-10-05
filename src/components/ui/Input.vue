@@ -34,7 +34,7 @@ const onInput = (event: Event): void => {
     :disabled="disabled"
     :class="
       cn(
-        'flex h-10 w-full rounded-xl border px-3 py-2 text-[14px] text-foreground transition-all duration-200 sm:h-11 sm:rounded-2xl sm:px-3.5 sm:text-sm',
+        'flex h-11 w-full rounded-xl border px-3 py-2 text-base text-foreground transition-all duration-200 sm:h-11 sm:rounded-2xl sm:px-3.5 sm:text-sm',
         'placeholder:text-muted-foreground/90 ring-offset-background focus-visible:outline-none',
         'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
         $props.class,

@@ -1,707 +1,290 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useQuery } from "@tanstack/vue-query";
+import { Check, Plus, Star } from "lucide-vue-next";
 import Button from "@/components/ui/Button.vue";
-import Card from "@/components/ui/Card.vue";
 import Input from "@/components/ui/Input.vue";
 import { loadDraft, saveDraft } from "@/db/offline-db";
 import {
   buildLogItemFromSavedFood,
-  normalizeLogItemGrams,
+  buildLogItemsFromSavedMeal,
+  totalsFromLogItems,
   type LogMealItem,
 } from "@/features/add-log/log-meal-service";
-import { formatMacro } from "@/lib/macros";
-import { parseNumberInput } from "@/lib/number";
+import {
+  defaultFoodGrams,
+  filterLibraryFoods,
+  readLibraryIds,
+  writeLibraryIds,
+  sortLibraryByRecent,
+  type LibraryFilter,
+} from "@/features/library/library-helpers";
 import { queryKeys } from "@/query/keys";
 import { savedFoodRepository } from "@/repositories/saved-food-repository";
+import { useActiveDayStore } from "@/stores/active-day-store";
+import type { SavedFood } from "@/types/domain";
 
-interface AddLogDraftSnapshot {
+interface DraftSnapshot {
   logItems?: LogMealItem[];
-  usedLibrarySource?: boolean;
-  pendingLibrarySelectReturn?: boolean;
   [key: string]: unknown;
 }
-
-interface EditableIngredient {
-  id: string;
-  name: string;
-  gramsText: string;
-  originalGrams: number;
-  originalCalories: number;
-  originalProtein: number;
-  originalCarbs: number;
-  originalFat: number;
-  linkedFoodId: string | null;
-}
-
-type SelectorFilter = "all" | "favorites" | "recent";
-type ActiveTab = "foods" | "meals";
-
-const LOG_MODE_DRAFT_KEY = "add-log:log";
-const LIBRARY_FAVORITES_KEY = "ezha:library-food-favorites";
-const LIBRARY_RECENTS_KEY = "ezha:library-food-recents";
-const MAX_RECENT_FOODS = 16;
-
-const props = withDefaults(
-  defineProps<{
-    embedded?: boolean;
-  }>(),
-  {
-    embedded: false,
-  },
-);
-const emit = defineEmits<{
-  done: [];
-}>();
-
+const props = defineProps<{ embedded?: boolean; date?: string }>();
+const emit = defineEmits<{ done: []; "busy-change": [busy: boolean] }>();
 const router = useRouter();
 const route = useRoute();
-
-// --- Foods tab state ---
+const activeDay = useActiveDayStore();
+const date = computed(
+  () =>
+    props.date ??
+    (typeof route.query.date === "string"
+      ? route.query.date
+      : activeDay.activeDate),
+);
+const draftKey = computed(() => `add-log:log:${date.value}`);
 const searchText = ref("");
-const activeFilter = ref<SelectorFilter>("all");
-const selectedFoodIds = ref<string[]>([]);
-const gramsByFoodId = ref<Record<string, string>>({});
-const favoriteFoodIds = ref<string[]>([]);
-const recentFoodIds = ref<string[]>([]);
-
-// --- Meals tab state ---
-const activeTab = ref<ActiveTab>("foods");
-const mealSearchText = ref("");
-const selectedMealIds = ref<string[]>([]);
-const mealIngredientsByMealId = ref<Record<string, EditableIngredient[]>>({});
-const loadingMealIds = ref<string[]>([]);
-const mealLoadError = ref<string | null>(null);
-
-// --- Queries ---
+const filter = ref<LibraryFilter>("all");
+const favorites = ref(readLibraryIds("favorites"));
+const recents = readLibraryIds("recents");
+const toggleFavorite = (id: string): void => {
+  favorites.value = favorites.value.includes(id)
+    ? favorites.value.filter((value) => value !== id)
+    : [...favorites.value, id];
+  writeLibraryIds("favorites", favorites.value);
+};
+const selected = ref<Record<string, LogMealItem[]>>({});
+const loadingId = ref<string | null>(null);
+const isConfirming = ref(false);
+watch([loadingId, isConfirming], ([loading, confirming]) =>
+  emit("busy-change", !!loading || confirming),
+);
+const errorMessage = ref<string | null>(null);
 const foodsQuery = useQuery({
-  queryKey: [...queryKeys.library, "selector-foods"],
-  queryFn: async () => savedFoodRepository.fetchNonMealFoods(),
+  queryKey: queryKeys.library,
+  queryFn: () => savedFoodRepository.fetchFoods(),
 });
-
-const mealsQuery = useQuery({
-  queryKey: [...queryKeys.library, "selector-meals"],
-  queryFn: async () => savedFoodRepository.fetchMeals(),
-});
-
-// --- Foods tab helpers ---
-const readIdArrayFromStorage = (key: string): string[] => {
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((value): value is string => typeof value === "string");
-  } catch {
-    return [];
-  }
-};
-
-const writeIdArrayToStorage = (key: string, ids: string[]): void => {
-  window.localStorage.setItem(key, JSON.stringify(ids));
-};
-
-const isSelected = (foodId: string): boolean =>
-  selectedFoodIds.value.includes(foodId);
-
-const ensureDefaultGrams = (foodId: string): void => {
-  if (!gramsByFoodId.value[foodId]) {
-    gramsByFoodId.value = { ...gramsByFoodId.value, [foodId]: "100" };
-  }
-};
-
-const setSelected = (foodId: string, nextSelected: boolean): void => {
-  if (nextSelected) {
-    if (!selectedFoodIds.value.includes(foodId)) {
-      selectedFoodIds.value = [...selectedFoodIds.value, foodId];
-    }
-    ensureDefaultGrams(foodId);
-    return;
-  }
-
-  selectedFoodIds.value = selectedFoodIds.value.filter((id) => id !== foodId);
-};
-
-const onSelectionChange = (foodId: string, event: Event): void => {
-  const input = event.target as HTMLInputElement | null;
-  setSelected(foodId, !!input?.checked);
-};
-
-const toggleSelected = (foodId: string): void => {
-  setSelected(foodId, !isSelected(foodId));
-};
-
-const setGrams = (foodId: string, value: string): void => {
-  gramsByFoodId.value = { ...gramsByFoodId.value, [foodId]: value };
-};
-
-const toggleFavorite = (foodId: string): void => {
-  favoriteFoodIds.value = favoriteFoodIds.value.includes(foodId)
-    ? favoriteFoodIds.value.filter((id) => id !== foodId)
-    : [...favoriteFoodIds.value, foodId];
-  writeIdArrayToStorage(LIBRARY_FAVORITES_KEY, favoriteFoodIds.value);
-};
-
-const filteredFoods = computed(() => {
-  const foods = foodsQuery.data.value ?? [];
-  const search = searchText.value.trim().toLowerCase();
-  const filteredBySearch = search
-    ? foods.filter((food) => food.name.toLowerCase().includes(search))
-    : foods;
-
-  if (activeFilter.value === "favorites") {
-    return filteredBySearch.filter((food) =>
-      favoriteFoodIds.value.includes(food.id),
-    );
-  }
-
-  if (activeFilter.value === "recent") {
-    return recentFoodIds.value
-      .map((id) => filteredBySearch.find((food) => food.id === id) ?? null)
-      .filter((food): food is (typeof filteredBySearch)[number] => !!food);
-  }
-
-  return filteredBySearch;
-});
-
-// --- Meals tab helpers ---
-const filteredMeals = computed(() => {
-  const meals = mealsQuery.data.value ?? [];
-  const search = mealSearchText.value.trim().toLowerCase();
-  return search
-    ? meals.filter((meal) => meal.name.toLowerCase().includes(search))
-    : meals;
-});
-
-const isMealSelected = (mealId: string): boolean =>
-  selectedMealIds.value.includes(mealId);
-
-const isMealLoading = (mealId: string): boolean =>
-  loadingMealIds.value.includes(mealId);
-
-const canSaveMeal = computed(() =>
-  selectedMealIds.value.some((mealId) =>
-    (mealIngredientsByMealId.value[mealId] ?? []).some(
-      (ingredient) => (parseNumberInput(ingredient.gramsText) ?? 0) > 0,
+const filteredFoods = computed(() =>
+  sortLibraryByRecent(
+    filterLibraryFoods(
+      foodsQuery.data.value ?? [],
+      searchText.value,
+      filter.value,
+      favorites.value,
     ),
+    recents,
   ),
 );
+const selectionCount = computed(() => Object.keys(selected.value).length);
+const selectedItems = computed(() => Object.values(selected.value).flat());
+const totals = computed(() => totalsFromLogItems(selectedItems.value));
+const filters = [
+  { value: "all", label: "All" },
+  { value: "foods", label: "Foods" },
+  { value: "meals", label: "Meals" },
+  { value: "favorites", label: "Favorites" },
+] as const;
 
-const selectedLibraryCount = computed(
-  () => selectedFoodIds.value.length + selectedMealIds.value.length,
-);
-
-const hasSelectedMealLoading = computed(() =>
-  selectedMealIds.value.some((mealId) => isMealLoading(mealId)),
-);
-
-const canConfirmLibrarySelection = computed(
-  () =>
-    !hasSelectedMealLoading.value &&
-    (selectedFoodIds.value.length > 0 || canSaveMeal.value),
-);
-
-const toggleMealSelection = async (mealId: string): Promise<void> => {
-  if (isMealSelected(mealId)) {
-    selectedMealIds.value = selectedMealIds.value.filter((id) => id !== mealId);
+const toggleSelection = async (food: SavedFood): Promise<void> => {
+  if (loadingId.value || isConfirming.value) return;
+  errorMessage.value = null;
+  if (selected.value[food.id]) {
+    const next = { ...selected.value };
+    delete next[food.id];
+    selected.value = next;
     return;
   }
-
-  selectedMealIds.value = [...selectedMealIds.value, mealId];
-
-  if (mealIngredientsByMealId.value[mealId]) return;
-
-  loadingMealIds.value = [...loadingMealIds.value, mealId];
-  mealLoadError.value = null;
+  loadingId.value = food.id;
   try {
-    const raw = await savedFoodRepository.fetchMealIngredients(mealId);
-    mealIngredientsByMealId.value = {
-      ...mealIngredientsByMealId.value,
-      [mealId]: raw.map((ingredient) => ({
-        id: ingredient.id,
-        name: ingredient.name,
-        gramsText: formatMacro(ingredient.grams, 1),
-        originalGrams: ingredient.grams,
-        originalCalories: ingredient.calories,
-        originalProtein: ingredient.protein,
-        originalCarbs: ingredient.carbs,
-        originalFat: ingredient.fat,
-        linkedFoodId: ingredient.linked_food_id ?? null,
-      })),
-    };
-  } catch (error) {
-    mealLoadError.value =
-      error instanceof Error ? error.message : "Unable to load ingredients.";
-    selectedMealIds.value = selectedMealIds.value.filter((id) => id !== mealId);
-  } finally {
-    loadingMealIds.value = loadingMealIds.value.filter((id) => id !== mealId);
-  }
-};
-
-const ingredientScaledMacros = (ingredient: EditableIngredient) => {
-  const grams = parseNumberInput(ingredient.gramsText) ?? 0;
-  if (ingredient.originalGrams <= 0 || grams <= 0) {
-    return { calories: 0, protein: 0, carbs: 0, fat: 0 };
-  }
-  const scale = grams / ingredient.originalGrams;
-  return {
-    calories: ingredient.originalCalories * scale,
-    protein: ingredient.originalProtein * scale,
-    carbs: ingredient.originalCarbs * scale,
-    fat: ingredient.originalFat * scale,
-  };
-};
-
-const buildLogItemFromEditableIngredient = (
-  ingredient: EditableIngredient,
-): LogMealItem | null => {
-  const grams = parseNumberInput(ingredient.gramsText) ?? 0;
-  if (grams <= 0 || ingredient.originalGrams <= 0) return null;
-
-  const per100 = 100 / ingredient.originalGrams;
-  return {
-    id: crypto.randomUUID(),
-    name: ingredient.name,
-    gramsText: formatMacro(grams, 1),
-    macroBasis: "per_100g",
-    baseGrams: 100,
-    baseCalories: ingredient.originalCalories * per100,
-    baseProtein: ingredient.originalProtein * per100,
-    baseCarbs: ingredient.originalCarbs * per100,
-    baseFat: ingredient.originalFat * per100,
-    origin: "library_meal",
-    linkedFoodId: ingredient.linkedFoodId,
-    aiConfidence: null,
-    aiNotes: "Added from saved meal",
-    isNutritionMissing: false,
-  };
-};
-
-// --- Draft helpers ---
-const preselectFromDraft = async (): Promise<void> => {
-  const draft = await loadDraft<AddLogDraftSnapshot>(LOG_MODE_DRAFT_KEY);
-  const logItems = Array.isArray(draft?.logItems) ? draft.logItems : [];
-  const libraryFoodItems = logItems.filter(
-    (item): item is LogMealItem =>
-      item.origin === "library_food" && !!item.linkedFoodId,
-  );
-
-  if (libraryFoodItems.length === 0) {
-    return;
-  }
-
-  const nextSelected: string[] = [];
-  const nextGrams: Record<string, string> = {};
-
-  for (const item of libraryFoodItems) {
-    const linkedFoodId = item.linkedFoodId;
-    if (!linkedFoodId || nextSelected.includes(linkedFoodId)) {
-      continue;
-    }
-    nextSelected.push(linkedFoodId);
-    nextGrams[linkedFoodId] = item.gramsText || "100";
-  }
-
-  selectedFoodIds.value = nextSelected;
-  gramsByFoodId.value = nextGrams;
-};
-
-const pushRecentFoodIds = (foodIds: string[]): void => {
-  recentFoodIds.value = [
-    ...foodIds,
-    ...recentFoodIds.value.filter((id) => !foodIds.includes(id)),
-  ].slice(0, MAX_RECENT_FOODS);
-  writeIdArrayToStorage(LIBRARY_RECENTS_KEY, recentFoodIds.value);
-};
-
-const returnToAddLog = async (): Promise<void> => {
-  if (props.embedded) {
-    emit("done");
-    return;
-  }
-
-  await router.replace({
-    name: "add-log",
-    query:
-      typeof route.query.date === "string"
-        ? { mode: "log", date: route.query.date }
-        : { mode: "log" },
-  });
-};
-
-const buildSelectedFoodLogItems = (): LogMealItem[] => {
-  const foods = foodsQuery.data.value ?? [];
-  return selectedFoodIds.value
-    .map((foodId) => {
-      const food = foods.find((candidate) => candidate.id === foodId);
-      if (!food) return null;
-      const normalized = normalizeLogItemGrams(
-        gramsByFoodId.value[foodId] ?? "100",
+    const items = food.is_meal
+      ? buildLogItemsFromSavedMeal(
+          await savedFoodRepository.fetchMealIngredients(food.id),
+        )
+      : [buildLogItemFromSavedFood(food, defaultFoodGrams(food))];
+    if (!items.length || items.some((item) => item.isNutritionMissing)) {
+      throw new Error(
+        `${food.name} has missing nutrition. Choose another item.`,
       );
-      const grams = normalized != null && normalized > 0 ? normalized : 100;
-      return buildLogItemFromSavedFood(food, grams);
-    })
-    .filter((item): item is LogMealItem => !!item);
-};
-
-const buildSelectedMealLogItems = (): LogMealItem[] => {
-  return selectedMealIds.value
-    .flatMap((mealId) => mealIngredientsByMealId.value[mealId] ?? [])
-    .map(buildLogItemFromEditableIngredient)
-    .filter((item): item is LogMealItem => item !== null);
-};
-
-// --- Confirm: foods + meals ---
-const confirmLibrarySelection = async (): Promise<void> => {
-  if (!canConfirmLibrarySelection.value) return;
-
-  const logItems = [
-    ...buildSelectedFoodLogItems(),
-    ...buildSelectedMealLogItems(),
-  ];
-  if (logItems.length === 0) return;
-
-  const draft = await loadDraft<AddLogDraftSnapshot>(LOG_MODE_DRAFT_KEY);
-  const currentLogItems = Array.isArray(draft?.logItems) ? draft.logItems : [];
-  const nonLibraryItems = currentLogItems.filter(
-    (item) => item.origin !== "library_food" && item.origin !== "library_meal",
-  );
-
-  const nextDraft: AddLogDraftSnapshot = {
-    ...draft,
-    pendingLibrarySelectReturn: true,
-    usedLibrarySource: logItems.length > 0,
-    logItems: [...nonLibraryItems, ...logItems],
-  };
-
-  await saveDraft(LOG_MODE_DRAFT_KEY, nextDraft);
-  if (selectedFoodIds.value.length > 0) {
-    pushRecentFoodIds(selectedFoodIds.value);
+    }
+    selected.value = { ...selected.value, [food.id]: items };
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error
+        ? error.message
+        : "Unable to add this item. Try again.";
+  } finally {
+    loadingId.value = null;
   }
-  await returnToAddLog();
 };
 
-favoriteFoodIds.value = readIdArrayFromStorage(LIBRARY_FAVORITES_KEY);
-recentFoodIds.value = readIdArrayFromStorage(LIBRARY_RECENTS_KEY);
-void preselectFromDraft();
+const returnToLog = async (): Promise<void> => {
+  if (props.embedded) emit("done");
+  else
+    await router.replace({
+      name: "add-log",
+      query: { mode: "log", date: date.value },
+    });
+};
 
-const selectorClass = computed(() =>
-  props.embedded
-    ? "glass h-[90vh] w-full max-w-none overflow-y-auto rounded-t-card rounded-b-none p-3 sm:max-w-2xl sm:rounded-card sm:p-5 space-y-3 sm:space-y-4"
-    : "app-page feature feature-add-log pb-28",
-);
-const selectorActionBarClass = computed(() =>
-  props.embedded
-    ? "glass sticky bottom-0 z-20 rounded-card p-3"
-    : "glass fixed inset-x-3 bottom-3 z-20 rounded-full px-4 py-3 sm:left-auto sm:right-auto sm:w-full sm:max-w-screen-sm",
-);
+const confirmSelection = async (): Promise<void> => {
+  if (!selectionCount.value || loadingId.value || isConfirming.value) return;
+  isConfirming.value = true;
+  errorMessage.value = null;
+  try {
+    const draft = await loadDraft<DraftSnapshot>(draftKey.value);
+    await saveDraft(draftKey.value, {
+      ...draft,
+      pendingLibrarySelectReturn: true,
+      usedLibrarySource: true,
+      logItems: [...(draft?.logItems ?? []), ...selectedItems.value],
+    });
+    const ids = Object.keys(selected.value);
+    writeLibraryIds(
+      "recents",
+      [...ids, ...recents.filter((id) => !ids.includes(id))].slice(0, 16),
+    );
+    await returnToLog();
+  } catch {
+    errorMessage.value = "Your selection could not be added. Please try again.";
+  } finally {
+    isConfirming.value = false;
+  }
+};
 </script>
 
 <template>
-  <section :class="selectorClass">
-    <header class="page-header">
-      <h1 class="page-title">Select from Library</h1>
-      <p class="page-subtitle">
-        Add individual foods or a full saved meal to your log.
-      </p>
+  <section
+    class="feature feature-add-log"
+    :class="
+      embedded
+        ? 'glass flex h-[90dvh] w-full flex-col overflow-hidden rounded-t-card p-3 sm:max-w-2xl sm:rounded-card sm:p-5'
+        : 'app-page feature feature-add-log'
+    "
+  >
+    <header class="mb-3 flex items-center justify-between gap-2">
+      <h1 class="page-title">Add from Library</h1>
+      <Button
+        variant="ghost"
+        :disabled="!!loadingId || isConfirming"
+        @click="returnToLog"
+        >Back</Button
+      >
     </header>
-
-    <!-- Tab bar + search -->
-    <Card class="glass space-y-3 p-3 sm:p-5">
-      <!-- Tab buttons -->
-      <div
-        class="flex gap-1 rounded-full border border-white/50 bg-white/30 p-1 dark:border-border/20 dark:bg-card/25"
-      >
-        <button
-          class="flex-1 rounded-lg py-1.5 text-sm font-semibold transition-all"
-          :class="
-            activeTab === 'foods'
-              ? 'bg-white/70 shadow text-foreground dark:bg-card/60'
-              : 'text-muted-foreground hover:text-foreground'
-          "
-          @click="activeTab = 'foods'"
-        >
-          Foods
-        </button>
-        <button
-          class="flex-1 rounded-lg py-1.5 text-sm font-semibold transition-all"
-          :class="
-            activeTab === 'meals'
-              ? 'bg-white/70 shadow text-foreground dark:bg-card/60'
-              : 'text-muted-foreground hover:text-foreground'
-          "
-          @click="activeTab = 'meals'"
-        >
-          Meals
-        </button>
-      </div>
-
-      <!-- Foods tab: search + filters -->
-      <template v-if="activeTab === 'foods'">
-        <Input v-model="searchText" placeholder="Search library foods..." />
-        <div class="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            :variant="activeFilter === 'all' ? 'default' : 'outline'"
-            @click="activeFilter = 'all'"
-          >
-            All
-          </Button>
-          <Button
-            size="sm"
-            :variant="activeFilter === 'favorites' ? 'default' : 'outline'"
-            @click="activeFilter = 'favorites'"
-          >
-            Favorites
-          </Button>
-          <Button
-            size="sm"
-            :variant="activeFilter === 'recent' ? 'default' : 'outline'"
-            @click="activeFilter = 'recent'"
-          >
-            Recent
-          </Button>
-        </div>
-      </template>
-
-      <!-- Meals tab: search -->
-      <template v-else>
-        <Input v-model="mealSearchText" placeholder="Search saved meals..." />
-      </template>
-    </Card>
-
-    <!-- Foods list -->
-    <section v-if="activeTab === 'foods'" class="stack-section mt-3">
-      <div
-        v-if="foodsQuery.isPending.value"
-        class="stack-section-state stack-section-state-dashed"
-      >
-        Loading library foods...
-      </div>
-
-      <div
-        v-else-if="filteredFoods.length === 0"
-        class="stack-section-state stack-section-state-dashed"
-      >
-        No foods found.
-      </div>
-
-      <div v-else class="stack-section-list">
-        <article
-          v-for="food in filteredFoods"
-          :key="food.id"
-          class="glass cursor-pointer space-y-2 rounded-card p-3"
-          role="button"
-          tabindex="0"
-          @click="toggleSelected(food.id)"
-          @keydown.enter.prevent="toggleSelected(food.id)"
-          @keydown.space.prevent="toggleSelected(food.id)"
-        >
-          <div class="flex items-start justify-between gap-2">
-            <div class="flex min-w-0 flex-1 items-start gap-3">
-              <input
-                class="mt-1 size-4 shrink-0 rounded border-border accent-primary"
-                type="checkbox"
-                :checked="isSelected(food.id)"
-                :aria-label="`Select ${food.name}`"
-                @click.stop
-                @change="onSelectionChange(food.id, $event)"
-              />
-              <div class="min-w-0">
-                <p class="text-sm font-semibold">{{ food.name }}</p>
-                <p class="text-xs text-muted-foreground">
-                  {{ formatMacro(food.calories_per_100g, 1) }} kcal/100g · P{{
-                    formatMacro(food.protein_per_100g, 1)
-                  }}
-                  · C{{ formatMacro(food.carbs_per_100g, 1) }} · F{{
-                    formatMacro(food.fat_per_100g, 1)
-                  }}
-                </p>
-              </div>
-            </div>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              @click.stop="toggleFavorite(food.id)"
-            >
-              {{ favoriteFoodIds.includes(food.id) ? "★" : "☆" }}
-            </Button>
-          </div>
-
-          <div
-            v-if="isSelected(food.id)"
-            class="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_10rem] sm:items-end"
-            @click.stop
-          >
-            <p class="text-xs text-muted-foreground">Serving / quantity</p>
-            <Input
-              :model-value="gramsByFoodId[food.id] ?? '100'"
-              type="number"
-              min="0"
-              step="0.1"
-              placeholder="Grams"
-              @click.stop
-              @update:modelValue="(value) => setGrams(food.id, String(value))"
-            />
-          </div>
-        </article>
-      </div>
-
-      <p
-        v-if="foodsQuery.error.value"
-        class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-      >
-        {{ (foodsQuery.error.value as Error).message }}
-      </p>
-    </section>
-
-    <!-- Meals list -->
-    <section v-else class="stack-section mt-3">
-      <div
-        v-if="mealsQuery.isPending.value"
-        class="stack-section-state stack-section-state-dashed"
-      >
-        Loading saved meals...
-      </div>
-
-      <div
-        v-else-if="filteredMeals.length === 0"
-        class="stack-section-state stack-section-state-dashed"
-      >
-        No saved meals found. Create a meal in the Library tab first.
-      </div>
-
-      <div v-else class="stack-section-list">
-        <article
-          v-for="meal in filteredMeals"
-          :key="meal.id"
-          class="glass overflow-hidden rounded-card"
-          :class="
-            isMealSelected(meal.id)
-              ? 'border-[hsl(var(--feature-primary)/0.5)]'
-              : 'border-border/70'
-          "
-        >
-          <!-- Meal header row -->
-          <div
-            class="flex cursor-pointer items-start justify-between gap-2 p-3"
-            role="button"
-            tabindex="0"
-            @click="toggleMealSelection(meal.id)"
-            @keydown.enter.prevent="toggleMealSelection(meal.id)"
-            @keydown.space.prevent="toggleMealSelection(meal.id)"
-          >
-            <div class="flex items-start gap-3">
-              <input
-                class="mt-0.5 size-4 shrink-0 rounded border-border accent-primary"
-                type="checkbox"
-                :checked="isMealSelected(meal.id)"
-                @click.stop
-                @change="toggleMealSelection(meal.id)"
-              />
-              <div>
-                <p class="text-sm font-semibold">{{ meal.name }}</p>
-                <p class="text-xs text-muted-foreground">
-                  Tap to expand and adjust ingredient grams
-                </p>
-              </div>
-            </div>
-            <span
-              class="mt-0.5 text-xs text-muted-foreground transition-transform"
-              :class="isMealSelected(meal.id) ? 'rotate-180' : ''"
-              >▾</span
-            >
-          </div>
-
-          <!-- Ingredient list (expanded) -->
-          <template v-if="isMealSelected(meal.id)">
-            <div
-              v-if="isMealLoading(meal.id)"
-              class="border-t border-border/50 px-3 py-4 text-center text-sm text-muted-foreground"
-            >
-              Loading ingredients...
-            </div>
-
-            <div
-              v-else-if="mealIngredientsByMealId[meal.id]?.length === 0"
-              class="border-t border-border/50 px-3 py-4 text-center text-sm text-muted-foreground"
-            >
-              This meal has no ingredients saved.
-            </div>
-
-            <div
-              v-else
-              class="border-t border-border/50 divide-y divide-border/40"
-            >
-              <div
-                v-for="ingredient in mealIngredientsByMealId[meal.id]"
-                :key="ingredient.id"
-                class="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2.5"
-              >
-                <div>
-                  <p class="text-sm font-medium">{{ ingredient.name }}</p>
-                  <p class="text-xs text-muted-foreground">
-                    {{
-                      Math.round(ingredientScaledMacros(ingredient).calories)
-                    }}
-                    kcal · P{{
-                      Math.round(ingredientScaledMacros(ingredient).protein)
-                    }}g · C{{
-                      Math.round(ingredientScaledMacros(ingredient).carbs)
-                    }}g · F{{
-                      Math.round(ingredientScaledMacros(ingredient).fat)
-                    }}g
-                  </p>
-                </div>
-                <div class="w-24">
-                  <Input
-                    v-model="ingredient.gramsText"
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    placeholder="g"
-                    @click.stop
-                  />
-                  <p
-                    class="mt-0.5 text-center text-[10px] text-muted-foreground"
-                  >
-                    grams
-                  </p>
-                </div>
-              </div>
-            </div>
-          </template>
-        </article>
-      </div>
-
-      <p
-        v-if="mealLoadError"
-        class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-      >
-        {{ mealLoadError }}
-      </p>
-
-      <p
-        v-if="mealsQuery.error.value"
-        class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-      >
-        {{ (mealsQuery.error.value as Error).message }}
-      </p>
-    </section>
-
-    <!-- Fixed bottom bar -->
-    <div :class="selectorActionBarClass">
-      <div class="mx-auto grid max-w-screen-sm grid-cols-2 gap-2">
-        <Button variant="ghost" @click="returnToAddLog">Cancel</Button>
+    <div class="space-y-2 pb-3">
+      <Input
+        v-model="searchText"
+        type="search"
+        aria-label="Search foods and meals"
+        placeholder="Search foods and meals"
+      />
+      <div class="flex flex-wrap gap-2" aria-label="Filter library">
         <Button
-          :disabled="!canConfirmLibrarySelection"
-          @click="confirmLibrarySelection"
+          v-for="option in filters"
+          :key="option.value"
+          size="sm"
+          :variant="filter === option.value ? 'secondary' : 'ghost'"
+          :aria-pressed="filter === option.value"
+          @click="filter = option.value"
+          >{{ option.label }}</Button
         >
-          Add Selected ({{ selectedLibraryCount }})
-        </Button>
       </div>
+    </div>
+    <div
+      :class="embedded ? 'min-h-0 flex-1 overflow-y-auto' : ''"
+      class="space-y-2"
+    >
+      <p
+        v-if="foodsQuery.isPending.value"
+        class="stack-section-state"
+        role="status"
+      >
+        Loading your library…
+      </p>
+      <div
+        v-else-if="foodsQuery.error.value"
+        class="stack-section-state"
+        role="alert"
+      >
+        <p>Unable to load your library.</p>
+        <Button variant="ghost" @click="foodsQuery.refetch()">Try again</Button>
+      </div>
+      <p v-else-if="!filteredFoods.length" class="stack-section-state">
+        {{
+          searchText || filter !== "all"
+            ? "No matches. Try another search or filter."
+            : "Your library is empty. Go back to log with a photo or description."
+        }}
+      </p>
+      <div
+        v-for="food in filteredFoods"
+        :key="food.id"
+        class="flex items-center gap-1"
+      >
+        <button
+          type="button"
+          class="flex min-h-14 w-full items-center gap-3 rounded-xl border border-border/50 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          :aria-pressed="!!selected[food.id]"
+          :disabled="!!loadingId || isConfirming"
+          @click="toggleSelection(food)"
+        >
+          <span class="min-w-0 flex-1">
+            <span class="block break-words text-sm font-semibold">{{
+              food.name
+            }}</span>
+            <span class="block text-xs text-muted-foreground">{{
+              food.is_meal
+                ? "Saved meal"
+                : food.unit_type === "per_serving"
+                  ? "One serving"
+                  : "100 g"
+            }}</span>
+          </span>
+          <span v-if="loadingId === food.id" class="text-xs" role="status"
+            >Loading…</span
+          >
+          <Check
+            v-else-if="selected[food.id]"
+            class="size-5 text-primary"
+            aria-hidden="true"
+          />
+          <Plus
+            v-else
+            class="size-5 text-muted-foreground"
+            aria-hidden="true"
+          />
+        </button>
+        <Button
+          variant="ghost"
+          class="size-11 p-0"
+          :aria-label="`${favorites.includes(food.id) ? 'Unfavorite' : 'Favorite'} ${food.name}`"
+          :aria-pressed="favorites.includes(food.id)"
+          @click="toggleFavorite(food.id)"
+          ><Star
+            class="size-4"
+            :class="
+              favorites.includes(food.id) ? 'fill-primary text-primary' : ''
+            "
+            aria-hidden="true"
+        /></Button>
+      </div>
+    </div>
+    <div
+      class="glass sticky bottom-0 mt-3 space-y-2 rounded-card p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]"
+    >
+      <p v-if="errorMessage" role="alert" class="text-sm text-destructive">
+        {{ errorMessage }}
+      </p>
+      <p v-if="selectionCount" class="text-xs text-muted-foreground">
+        {{ Math.round(totals.calories) }} kcal · Adjust quantities on the next
+        screen.
+      </p>
+      <Button
+        class="w-full"
+        :loading="isConfirming"
+        :disabled="!selectionCount || !!loadingId"
+        @click="confirmSelection"
+        >Add {{ selectionCount || "" }}
+        {{ selectionCount === 1 ? "item" : "items" }}</Button
+      >
     </div>
   </section>
 </template>

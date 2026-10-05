@@ -3,79 +3,31 @@ import { computed } from "vue";
 import {
   formatMacro,
   macroProgressBarPercent,
-  macroProgressPercent,
+  remainingMacros,
 } from "@/lib/macros";
 import type { MacroTargets, MacroTotals } from "@/types/domain";
-
-type MacroRow = {
-  key: "protein" | "carbs" | "fat";
-  title: string;
-  eaten: number;
-  target: number;
-  gradient: string;
-};
-
-const props = defineProps<{
-  targets: MacroTargets;
-  eaten: MacroTotals;
-}>();
-
+const props = defineProps<{ targets: MacroTargets; eaten: MacroTotals }>();
+const remaining = computed(() => remainingMacros(props.targets, props.eaten));
 const ringRadius = 58;
 const ringCircumference = 2 * Math.PI * ringRadius;
-
 const consumedCalories = computed(() => Math.round(props.eaten.calories));
 const targetCalories = computed(() => Math.round(props.targets.calories));
 const remainingCalories = computed(() =>
   Math.max(0, targetCalories.value - consumedCalories.value),
 );
-const calorieProgress = computed(() =>
-  props.targets.calories > 0
-    ? Math.min(Math.max(props.eaten.calories / props.targets.calories, 0), 1)
-    : 0,
-);
 const ringOffset = computed(
-  () => ringCircumference * (1 - calorieProgress.value),
+  () =>
+    ringCircumference *
+    (1 -
+      macroProgressBarPercent(props.eaten.calories, props.targets.calories) /
+        100),
 );
-
-const macroRows = computed<MacroRow[]>(() => [
-  {
-    key: "protein",
-    title: "Protein",
-    eaten: props.eaten.protein,
-    target: props.targets.protein,
-    gradient:
-      "linear-gradient(90deg, hsl(var(--secondary)), hsl(var(--secondary) / 0.62))",
-  },
-  {
-    key: "carbs",
-    title: "Carbs",
-    eaten: props.eaten.carbs,
-    target: props.targets.carbs,
-    gradient:
-      "linear-gradient(90deg, hsl(var(--accent)), hsl(var(--accent) / 0.62))",
-  },
-  {
-    key: "fat",
-    title: "Fat",
-    eaten: props.eaten.fat,
-    target: props.targets.fat,
-    gradient:
-      "linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary) / 0.62))",
-  },
-]);
-
-const progressStyle = (
-  eaten: number,
-  target: number,
-  gradient: string,
-): { width: string; background: string } => {
-  return {
-    width: `${macroProgressBarPercent(eaten, target)}%`,
-    background: gradient,
-  };
-};
+const rows = [
+  { key: "protein", title: "Protein", unit: "g", color: "secondary" },
+  { key: "carbs", title: "Carbs", unit: "g", color: "accent" },
+  { key: "fat", title: "Fat", unit: "g", color: "primary" },
+] as const;
 </script>
-
 <template>
   <div class="grid gap-5 sm:grid-cols-[8.25rem_minmax(0,1fr)] sm:items-center">
     <div class="relative mx-auto size-[132px] shrink-0">
@@ -112,7 +64,6 @@ const progressStyle = (
           class="transition-[stroke-dashoffset] duration-500 ease-out"
         />
       </svg>
-
       <div class="absolute inset-0 grid place-items-center text-center">
         <div>
           <p class="text-[28px] font-extrabold leading-none tracking-tight">
@@ -124,26 +75,32 @@ const progressStyle = (
         </div>
       </div>
     </div>
-
-    <div class="space-y-3">
-      <div v-for="row in macroRows" :key="row.key" class="space-y-1.5">
-        <div class="flex items-center justify-between gap-3">
-          <span class="text-[12px] font-semibold">{{ row.title }}</span>
-          <span class="text-[11px] font-semibold text-muted-foreground">
-            {{ formatMacro(row.eaten, 0) }} / {{ formatMacro(row.target, 0) }} g
-          </span>
+    <div class="space-y-4">
+      <div v-for="row in rows" :key="row.key" class="min-w-0 space-y-1.5">
+        <div class="flex items-baseline justify-between gap-3">
+          <p class="text-sm font-medium">{{ row.title }}</p>
+          <p class="text-lg font-bold tabular-nums">
+            {{ formatMacro(Math.abs(remaining[row.key]), 0) }} {{ row.unit }}
+            <span class="text-xs font-medium text-muted-foreground">{{
+              remaining[row.key] < 0 ? "over" : "left"
+            }}</span>
+          </p>
         </div>
         <div
-          class="h-[7px] overflow-hidden rounded-full"
-          style="background: hsl(var(--track) / 0.14)"
+          class="h-1.5 overflow-hidden rounded-full bg-track/15"
+          aria-hidden="true"
         >
           <div
-            class="h-full rounded-full transition-[width] duration-500 ease-out"
-            :style="progressStyle(row.eaten, row.target, row.gradient)"
+            class="h-full rounded-full"
+            :style="{
+              width: `${macroProgressBarPercent(eaten[row.key], targets[row.key])}%`,
+              background: `hsl(var(--${row.color}))`,
+            }"
           />
         </div>
-        <p class="text-[10.5px] font-semibold text-muted-foreground">
-          {{ macroProgressPercent(row.eaten, row.target) }}% closed
+        <p class="text-xs text-muted-foreground">
+          {{ formatMacro(eaten[row.key], 0) }} /
+          {{ formatMacro(targets[row.key], 0) }} {{ row.unit }} eaten
         </p>
       </div>
     </div>

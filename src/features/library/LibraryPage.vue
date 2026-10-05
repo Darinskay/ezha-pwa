@@ -1,9 +1,16 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import {
+  DropdownMenuRoot,
+  DropdownMenuTrigger,
+  DropdownMenuPortal,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "radix-vue";
 import { useRouter } from "vue-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import { useInfiniteScroll } from "@vueuse/core";
-import { ChevronRight, Trash2, X } from "lucide-vue-next";
+import { MoreHorizontal, Pencil, Star, X } from "lucide-vue-next";
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import Input from "@/components/ui/Input.vue";
@@ -12,6 +19,13 @@ import { queryKeys } from "@/query/keys";
 import { savedFoodRepository } from "@/repositories/saved-food-repository";
 import FoodEditorDialog from "@/features/library/FoodEditorDialog.vue";
 import MealQuickLogDialog from "@/features/meal/MealQuickLogDialog.vue";
+import {
+  filterLibraryFoods,
+  readLibraryIds,
+  writeLibraryIds,
+  sortLibraryByRecent,
+  type LibraryFilter,
+} from "@/features/library/library-helpers";
 import type { SavedFood, SavedFoodDraft } from "@/types/domain";
 
 const router = useRouter();
@@ -19,6 +33,22 @@ const localQueryClient = useQueryClient();
 const PAGE_SIZE = 20;
 
 const searchText = ref("");
+const activeFilter = ref<LibraryFilter>("all");
+const logMessage = ref("");
+const favorites = ref(readLibraryIds("favorites"));
+const recents = ref(readLibraryIds("recents"));
+const toggleFavorite = (id: string): void => {
+  favorites.value = favorites.value.includes(id)
+    ? favorites.value.filter((value) => value !== id)
+    : [...favorites.value, id];
+  writeLibraryIds("favorites", favorites.value);
+};
+const filters = [
+  { value: "all", label: "All" },
+  { value: "foods", label: "Foods" },
+  { value: "meals", label: "Meals" },
+  { value: "favorites", label: "Favorites" },
+] as const;
 const editingFood = ref<SavedFood | null>(null);
 const loggingMeal = ref<SavedFood | null>(null);
 const visibleCount = ref(PAGE_SIZE);
@@ -28,12 +58,17 @@ const foodsQuery = useQuery({
   queryFn: async () => savedFoodRepository.fetchFoods(),
 });
 
-const filteredFoods = computed(() => {
-  const foods = foodsQuery.data.value ?? [];
-  const search = searchText.value.trim().toLowerCase();
-  if (!search) return foods;
-  return foods.filter((food) => food.name.toLowerCase().includes(search));
-});
+const filteredFoods = computed(() =>
+  sortLibraryByRecent(
+    filterLibraryFoods(
+      foodsQuery.data.value ?? [],
+      searchText.value,
+      activeFilter.value,
+      favorites.value,
+    ),
+    recents.value,
+  ),
+);
 
 const visibleFoods = computed(() =>
   filteredFoods.value.slice(0, visibleCount.value),
@@ -86,28 +121,29 @@ const openAddFood = async (): Promise<void> => {
   await router.push({ name: "add-log", query: { mode: "library" } });
 };
 
-const openFood = (food: SavedFood): void => {
-  if (food.is_meal) {
-    loggingMeal.value = food;
-    return;
-  }
-
-  editingFood.value = food;
-};
-
 const onDelete = async (foodId: string): Promise<void> => {
   const confirmed = window.confirm("Delete this food?");
   if (!confirmed) return;
-  await deleteFoodMutation.mutateAsync(foodId);
+  deleteFoodMutation.mutate(foodId);
 };
 
 const onSaveEdit = async (draft: SavedFoodDraft): Promise<void> => {
   if (!editingFood.value) return;
-  await saveFoodMutation.mutateAsync({ id: editingFood.value.id, draft });
+  saveFoodMutation.mutate({ id: editingFood.value.id, draft });
 };
 
-const onMealSaved = async (): Promise<void> => {
+const onMealSaved = async (queued: boolean): Promise<void> => {
+  if (loggingMeal.value) {
+    recents.value = [
+      loggingMeal.value.id,
+      ...recents.value.filter((id) => id !== loggingMeal.value?.id),
+    ].slice(0, 16);
+    writeLibraryIds("recents", recents.value);
+  }
   loggingMeal.value = null;
+  logMessage.value = queued
+    ? "Saved on this device. Your totals will update after syncing."
+    : "Meal logged.";
   await invalidateDailyDataQueries(localQueryClient);
 };
 
@@ -125,30 +161,12 @@ const foodUnitLabel = (food: SavedFood): string => {
 };
 
 const foodDescription = (food: SavedFood): string => {
-  const calories = food.is_meal
-    ? food.calories_per_serving
-    : food.unit_type === "per_serving"
+  if (food.is_meal) return "Saved meal";
+  const calories =
+    food.unit_type === "per_serving"
       ? food.calories_per_serving
       : food.calories_per_100g;
-  const protein = food.is_meal
-    ? food.protein_per_serving
-    : food.unit_type === "per_serving"
-      ? food.protein_per_serving
-      : food.protein_per_100g;
-  const carbs = food.is_meal
-    ? food.carbs_per_serving
-    : food.unit_type === "per_serving"
-      ? food.carbs_per_serving
-      : food.carbs_per_100g;
-  const fat = food.is_meal
-    ? food.fat_per_serving
-    : food.unit_type === "per_serving"
-      ? food.fat_per_serving
-      : food.fat_per_100g;
-
-  return `${foodUnitLabel(food)} · ${Math.round(calories)} kcal · P ${Math.round(
-    protein,
-  )}g · C ${Math.round(carbs)}g · F ${Math.round(fat)}g`;
+  return `${foodUnitLabel(food)} · ${Math.round(calories)} kcal`;
 };
 </script>
 
@@ -164,28 +182,42 @@ const foodDescription = (food: SavedFood): string => {
         <div class="relative min-w-0 flex-1">
           <Input
             v-model="searchText"
-            class="pr-10"
-            placeholder="Search your library..."
+            class="pr-12"
+            type="search"
+            aria-label="Search foods and meals"
+            placeholder="Search foods and meals"
           />
           <button
             v-if="searchText"
             type="button"
-            class="absolute right-2 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            class="absolute right-0 top-1/2 inline-flex size-11 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label="Clear search"
             @click="clearSearch"
           >
             <X class="size-4" />
           </button>
         </div>
-        <Button class="shrink-0 px-3 sm:px-4" @click="openAddFood"
-          >Add food</Button
+        <Button class="shrink-0 px-3 sm:px-4" @click="openAddFood">Add</Button>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2" aria-label="Filter library">
+        <Button
+          v-for="option in filters"
+          :key="option.value"
+          size="sm"
+          :variant="activeFilter === option.value ? 'secondary' : 'ghost'"
+          :aria-pressed="activeFilter === option.value"
+          @click="activeFilter = option.value"
+          >{{ option.label }}</Button
         >
       </div>
     </Card>
+    <p v-if="logMessage" role="status" class="text-sm text-primary">
+      {{ logMessage }}
+    </p>
 
     <section class="stack-section">
       <div class="stack-section-header">
-        <h2 class="text-lg font-semibold">Saved foods</h2>
+        <h2 class="text-lg font-semibold">Foods and meals</h2>
         <span class="stack-section-meta">
           {{ filteredFoods.length }} items
         </span>
@@ -202,7 +234,11 @@ const foodDescription = (food: SavedFood): string => {
         v-else-if="filteredFoods.length === 0"
         class="stack-section-state stack-section-state-dashed"
       >
-        No saved foods.
+        {{
+          searchText || activeFilter !== "all"
+            ? "No matches. Try another search or filter."
+            : "Your library is empty. Save a food or meal to log it quickly next time."
+        }}
       </div>
 
       <div v-else class="space-y-2">
@@ -213,54 +249,93 @@ const foodDescription = (food: SavedFood): string => {
         >
           <div class="flex min-h-12 items-center gap-3">
             <button
-              class="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 py-1.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              class="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 py-1.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               type="button"
-              :aria-label="`Open ${food.name}`"
-              @click="openFood(food)"
+              :aria-label="`Log ${food.name}`"
+              @click="loggingMeal = food"
             >
               <span class="min-w-0 flex-1">
-                <h3
-                  class="truncate text-[13.5px] font-bold leading-5"
-                >
+                <h3 class="break-words text-sm font-bold leading-5">
                   {{ food.name }}
                 </h3>
-                <p class="truncate text-[10.5px] font-semibold leading-4 text-muted-foreground">
+                <p class="text-xs leading-4 text-muted-foreground">
                   {{ foodDescription(food) }}
                 </p>
               </span>
-              <ChevronRight
-                class="size-4 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
             </button>
 
             <Button
-              v-if="food.is_meal"
               variant="secondary"
               size="sm"
-              class="h-9 rounded-full px-3"
+              class="h-11 rounded-full px-3"
+              :aria-label="`Log ${food.name}`"
               @click.stop="loggingMeal = food"
             >
               Log
             </Button>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              class="size-9 rounded-full p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-              :loading="deleteFoodMutation.isPending.value"
-              :aria-label="`Delete ${food.name}`"
-              @click.stop="onDelete(food.id)"
-            >
-              <Trash2
-                v-if="!deleteFoodMutation.isPending.value"
-                class="size-4"
-              />
-            </Button>
+            <DropdownMenuRoot>
+              <DropdownMenuTrigger as-child>
+                <Button
+                  variant="ghost"
+                  class="size-11 p-0"
+                  :aria-label="`Manage ${food.name}`"
+                  ><MoreHorizontal class="size-5" aria-hidden="true"
+                /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuContent
+                  align="end"
+                  :side-offset="6"
+                  class="glass feature feature-library z-50 grid min-w-44 gap-1 rounded-xl p-1"
+                >
+                  <DropdownMenuItem
+                    class="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-sm outline-none focus:bg-muted"
+                    @select="toggleFavorite(food.id)"
+                    ><Star class="size-4" aria-hidden="true" />{{
+                      favorites.includes(food.id) ? "Unfavorite" : "Favorite"
+                    }}</DropdownMenuItem
+                  >
+                  <DropdownMenuItem
+                    v-if="!food.is_meal"
+                    class="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-sm outline-none focus:bg-muted"
+                    @select="
+                      saveFoodMutation.reset();
+                      editingFood = food;
+                    "
+                    ><Pencil class="size-4" aria-hidden="true" />Edit
+                    food</DropdownMenuItem
+                  >
+                  <DropdownMenuItem
+                    class="flex min-h-11 cursor-pointer items-center rounded-lg px-3 text-sm text-destructive outline-none focus:bg-muted"
+                    :disabled="deleteFoodMutation.isPending.value"
+                    @select="onDelete(food.id)"
+                    >Delete</DropdownMenuItem
+                  >
+                </DropdownMenuContent>
+              </DropdownMenuPortal>
+            </DropdownMenuRoot>
           </div>
         </article>
       </div>
 
+      <Button
+        v-if="visibleCount < filteredFoods.length"
+        variant="ghost"
+        class="w-full"
+        @click="loadMoreFoods"
+        >Show more</Button
+      >
+      <p
+        v-if="saveFoodMutation.error.value || deleteFoodMutation.error.value"
+        role="alert"
+        class="text-sm text-destructive"
+      >
+        {{
+          (saveFoodMutation.error.value as Error | null)?.message ??
+          (deleteFoodMutation.error.value as Error | null)?.message
+        }}
+      </p>
       <p
         v-if="foodsQuery.error.value"
         class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
@@ -273,6 +348,7 @@ const foodDescription = (food: SavedFood): string => {
       v-if="editingFood"
       :food="editingFood"
       :saving="saveFoodMutation.isPending.value"
+      :save-error="(saveFoodMutation.error.value as Error | null)?.message"
       @save="onSaveEdit"
       @close="editingFood = null"
     />

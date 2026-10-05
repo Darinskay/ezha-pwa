@@ -20,6 +20,16 @@ const title = computed(
   () => props.entryWithItems.entry.input_text?.trim() || "Meal",
 );
 
+const detailTitle = computed(() => {
+  const itemNames = props.entryWithItems.items
+    .map((item) => item.name.trim())
+    .join(", ");
+  return itemNames &&
+    title.value.toLocaleLowerCase() === itemNames.toLocaleLowerCase()
+    ? null
+    : title.value;
+});
+
 const sourceLabel = computed(() => {
   const source = props.entryWithItems.entry.ai_source;
   if (source === "library") return "Library";
@@ -49,11 +59,7 @@ const createdLabel = computed(() => {
 });
 
 const descriptionLabel = computed(() =>
-  [
-    createdLabel.value,
-    sourceLabel.value,
-    confidenceLabel.value,
-  ]
+  [createdLabel.value, sourceLabel.value, confidenceLabel.value]
     .filter(Boolean)
     .join(" · "),
 );
@@ -70,95 +76,83 @@ const handleDelete = (): void => {
 };
 
 const toggleExpanded = (): void => {
-  if (!props.showExpand || props.entryWithItems.items.length === 0) return;
+  if (!props.showExpand) return;
   expanded.value = !expanded.value;
 };
 </script>
 
 <template>
-  <article class="glass rounded-thumb p-2.5 sm:p-3">
-    <div class="flex min-h-12 items-center gap-3">
-      <button
-        v-if="showExpand && entryWithItems.items.length > 0"
-        class="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 py-1.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        type="button"
-        :aria-expanded="expanded"
-        :aria-label="`${expanded ? 'Hide' : 'Show'} details for ${title}`"
+  <article class="glass rounded-thumb p-2">
+    <div class="flex items-center gap-1">
+      <component
+        :is="showExpand ? 'button' : 'div'"
+        class="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        :type="showExpand ? 'button' : undefined"
+        :aria-expanded="showExpand ? expanded : undefined"
+        :aria-controls="
+          showExpand ? `entry-${entryWithItems.entry.id}` : undefined
+        "
+        :aria-label="
+          showExpand
+            ? `${expanded ? 'Hide' : 'Show'} details for ${title}`
+            : undefined
+        "
         @click="toggleExpanded"
       >
         <span class="min-w-0 flex-1">
-          <h4 class="truncate text-[13.5px] font-bold leading-5">
-            {{ title }}
-          </h4>
-          <p class="truncate text-[10.5px] font-semibold leading-4 text-muted-foreground">
-            {{ descriptionLabel }}
-          </p>
-          <p class="truncate text-[10.5px] font-semibold leading-4 text-muted-foreground">
-            {{ macroLine }}
-          </p>
+          <span class="block text-sm font-bold"
+            >{{ Math.round(entryWithItems.entry.calories) }} kcal</span
+          >
+          <span class="block text-xs text-muted-foreground">{{
+            macroLine
+          }}</span>
         </span>
         <ChevronDown
-          class="size-4 shrink-0 text-muted-foreground transition-transform duration-200"
+          v-if="showExpand"
+          class="size-4 shrink-0 text-muted-foreground"
           :class="{ 'rotate-180': expanded }"
           aria-hidden="true"
         />
-      </button>
-
-      <div v-else class="min-w-0 flex-1 px-1.5 py-1.5">
-        <h4 class="truncate text-[13.5px] font-bold leading-5">
-          {{ title }}
-        </h4>
-        <p class="truncate text-[10.5px] font-semibold leading-4 text-muted-foreground">
-          {{ descriptionLabel }}
-        </p>
-        <p class="truncate text-[10.5px] font-semibold leading-4 text-muted-foreground">
-          {{ macroLine }}
-        </p>
-      </div>
-
-      <div class="shrink-0 text-right">
-        <p class="text-sm font-extrabold leading-none">
-          {{ Math.round(entryWithItems.entry.calories) }}
-        </p>
-        <p class="mt-0.5 text-[10px] font-semibold text-muted-foreground">
-          kcal
-        </p>
-      </div>
-
+      </component>
       <Button
         v-if="showDelete"
         variant="ghost"
-        size="sm"
-        class="size-9 rounded-full p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+        class="size-11 rounded-full p-0 text-destructive hover:bg-destructive/10"
         :loading="deleteLoading"
         :aria-label="`Delete ${title}`"
-        @click.stop="handleDelete"
+        @click="handleDelete"
       >
-        <Trash2 v-if="!deleteLoading" class="size-4" />
+        <Trash2 v-if="!deleteLoading" class="size-4" aria-hidden="true" />
       </Button>
     </div>
-
-    <ul
-      v-if="expanded && entryWithItems.items.length > 0"
-      class="mt-2 space-y-2 border-t pt-2"
-      style="border-color: hsl(var(--feature-primary) / 0.12)"
+    <div
+      v-if="expanded"
+      :id="`entry-${entryWithItems.entry.id}`"
+      class="mt-2 space-y-2 border-t border-border/50 px-2 pt-3"
     >
-      <li
-        v-for="item in entryWithItems.items"
-        :key="item.id"
-        class="rounded-thumb border border-white/50 bg-white/40 px-3 py-2 text-sm dark:border-border/20 dark:bg-card/30"
-      >
-        <div class="flex items-center justify-between">
-          <span class="font-medium">{{ item.name }}</span>
-          <span class="text-xs text-muted-foreground">{{ item.grams }} g</span>
-        </div>
-        <p class="mt-1 text-xs text-muted-foreground">
-          {{ Math.round(item.calories) }} kcal · P{{
-            Math.round(item.protein)
-          }}
-          · C{{ Math.round(item.carbs) }} · F{{ Math.round(item.fat) }}
-        </p>
-      </li>
-    </ul>
+      <h3 v-if="detailTitle" class="break-words text-sm font-semibold">
+        {{ detailTitle }}
+      </h3>
+      <p class="text-xs text-muted-foreground">{{ descriptionLabel }}</p>
+      <ul v-if="entryWithItems.items.length" class="divide-y divide-border/40">
+        <li
+          v-for="item in entryWithItems.items"
+          :key="item.id"
+          class="py-2 text-sm"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <span class="min-w-0 break-words font-medium">{{ item.name }}</span>
+            <span class="shrink-0 text-xs text-muted-foreground"
+              >{{ item.grams }} g</span
+            >
+          </div>
+          <p class="mt-1 text-xs text-muted-foreground">
+            {{ Math.round(item.calories) }} kcal · P
+            {{ Math.round(item.protein) }}g · C {{ Math.round(item.carbs) }}g ·
+            F {{ Math.round(item.fat) }}g
+          </p>
+        </li>
+      </ul>
+    </div>
   </article>
 </template>

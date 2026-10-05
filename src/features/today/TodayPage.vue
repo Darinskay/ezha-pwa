@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { ChevronDown, Target } from "lucide-vue-next";
+import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import MacroProgressTable from "@/components/MacroProgressTable.vue";
 import FoodEntryCard from "@/components/FoodEntryCard.vue";
-import { EXAMPLE_TARGETS } from "@/lib/macros";
 import { foodEntryRepository } from "@/repositories/food-entry-repository";
 import { invalidateDailyDataQueries } from "@/query/invalidation";
 import { queryKeys } from "@/query/keys";
@@ -20,6 +20,14 @@ import TargetSelectorDialog from "@/features/today/TargetSelectorDialog.vue";
 
 const queryClient = useQueryClient();
 const router = useRouter();
+const route = useRoute();
+const logMessage = computed(() =>
+  route.query.logged === "queued"
+    ? "Saved on this device. Your totals will update after syncing."
+    : route.query.logged === "saved"
+      ? "Meal logged."
+      : "",
+);
 const activeDayStore = useActiveDayStore();
 
 const showDeleteToast = ref(false);
@@ -101,14 +109,17 @@ const applyTargetMutation = useMutation({
 });
 
 const deleteEntry = async (entryId: string): Promise<void> => {
-  const confirmed = window.confirm("Delete entry?");
+  const name =
+    summaryEntries.value.find((entry) => entry.id === entryId)?.input_text ||
+    "this meal";
+  const confirmed = window.confirm(`Delete ${name}?`);
   if (!confirmed) return;
-  await deleteEntryMutation.mutateAsync(entryId);
+  deleteEntryMutation.mutate(entryId);
 };
 
 const isSummaryPending = computed(() => todaySummaryQuery.isPending.value);
 const isEntriesPending = computed(
-  () => todayEntriesQuery.isPending.value || todayEntriesQuery.isFetching.value,
+  () => !!todayData.value && todayEntriesQuery.isPending.value,
 );
 const targetError = computed(
   () => (applyTargetMutation.error.value as Error | null) ?? null,
@@ -121,7 +132,7 @@ const openTargetSelector = (): void => {
 };
 
 const applyTarget = async (targetId: string): Promise<void> => {
-  await applyTargetMutation.mutateAsync(targetId);
+  applyTargetMutation.mutate(targetId);
 };
 
 const addTarget = async (): Promise<void> => {
@@ -132,6 +143,40 @@ const addTarget = async (): Promise<void> => {
 
 <template>
   <section class="app-page feature feature-today">
+    <p v-if="logMessage" role="status" class="text-sm text-primary">
+      {{ logMessage }}
+      {{ typeof route.query.notice === "string" ? route.query.notice : "" }}
+    </p>
+    <button
+      v-if="todayData"
+      class="group glass flex w-full items-center justify-between gap-3 rounded-card border border-white/70 bg-white/40 px-3 py-2.5 text-left shadow-[inset_0_1px_0_rgb(255_255_255_/_0.5)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:border-border/20 dark:bg-card/40 dark:hover:bg-card/50"
+      type="button"
+      @click="openTargetSelector"
+    >
+      <div class="flex min-w-0 items-center gap-3">
+        <div
+          class="flex size-10 shrink-0 items-center justify-center rounded-thumb border border-primary/20 bg-primary/10 text-primary"
+        >
+          <Target class="size-5" />
+        </div>
+        <div class="min-w-0">
+          <p
+            class="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+          >
+            {{ targetEyebrow }}
+          </p>
+          <p class="truncate text-sm font-semibold text-foreground">
+            {{ targetLabel }} · {{ targetCalories }} kcal
+          </p>
+        </div>
+      </div>
+
+      <div
+        class="flex size-8 shrink-0 items-center justify-center rounded-full bg-track/10 text-muted-foreground transition-colors group-hover:text-foreground"
+      >
+        <ChevronDown class="size-4" />
+      </div>
+    </button>
     <Card class="space-y-4 rounded-[1.75rem] p-3 sm:p-5">
       <div v-if="isSummaryPending" class="space-y-3">
         <div class="space-y-4">
@@ -149,42 +194,17 @@ const addTarget = async (): Promise<void> => {
           </div>
         </div>
       </div>
-      <template v-else>
-        <button
-          class="group flex w-full items-center justify-between gap-3 rounded-card border border-white/70 bg-white/40 px-3 py-2.5 text-left shadow-[inset_0_1px_0_rgb(255_255_255_/_0.5)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:border-border/20 dark:bg-card/40 dark:hover:bg-card/50"
-          type="button"
-          @click="openTargetSelector"
-        >
-          <div class="flex min-w-0 items-center gap-3">
-            <div
-              class="flex size-10 shrink-0 items-center justify-center rounded-thumb border border-primary/20 bg-primary/10 text-primary"
-            >
-              <Target class="size-5" />
-            </div>
-            <div class="min-w-0">
-              <p
-                class="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
-              >
-                {{ targetEyebrow }}
-              </p>
-              <p class="truncate text-sm font-semibold text-foreground">
-                {{ targetLabel }} · {{ targetCalories }} kcal
-              </p>
-            </div>
-          </div>
-
-          <div
-            class="flex size-8 shrink-0 items-center justify-center rounded-full bg-track/10 text-muted-foreground transition-colors group-hover:text-foreground"
-          >
-            <ChevronDown class="size-4" />
-          </div>
-        </button>
-
+      <template v-else-if="todayData">
+        <h1 class="text-lg font-semibold">
+          {{
+            activeDayStore.isToday
+              ? "Remaining today"
+              : "Remaining for this day"
+          }}
+        </h1>
         <MacroProgressTable
-          :targets="todayData?.targets ?? EXAMPLE_TARGETS"
-          :eaten="
-            todayData?.totals ?? { calories: 0, protein: 0, carbs: 0, fat: 0 }
-          "
+          :targets="todayData.targets"
+          :eaten="todayData.totals"
         />
       </template>
 
@@ -194,11 +214,17 @@ const addTarget = async (): Promise<void> => {
       >
         {{ todayError.message }}
       </p>
+      <Button
+        v-if="todayError"
+        variant="ghost"
+        @click="todaySummaryQuery.refetch()"
+        >Try again</Button
+      >
     </Card>
 
     <section class="stack-section">
       <div class="stack-section-header">
-        <h2 class="text-lg font-semibold">Daily Progress</h2>
+        <h2 class="text-lg font-semibold">Logged meals</h2>
         <span class="stack-section-meta">
           {{ todayData?.entries.length ?? 0 }} entries
         </span>
@@ -233,10 +259,10 @@ const addTarget = async (): Promise<void> => {
         </div>
       </div>
       <p
-        v-else-if="entriesError"
+        v-else-if="todayError || entriesError"
         class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
       >
-        {{ entriesError.message }}
+        {{ (entriesError ?? todayError)?.message }}
       </p>
       <div
         v-else-if="!entriesWithItems.length"
@@ -247,7 +273,17 @@ const addTarget = async (): Promise<void> => {
           Tap the <strong>+</strong> button below to add your first meal.
         </p>
       </div>
-      <div v-else class="space-y-3">
+      <p
+        v-if="deleteEntryMutation.error.value"
+        role="alert"
+        class="text-sm text-destructive"
+      >
+        {{ (deleteEntryMutation.error.value as Error).message }}
+      </p>
+      <div
+        v-if="!isSummaryPending && !isEntriesPending && entriesWithItems.length"
+        class="space-y-2"
+      >
         <div v-for="entry in entriesWithItems" :key="entry.entry.id">
           <FoodEntryCard
             :entry-with-items="entry"
@@ -262,7 +298,8 @@ const addTarget = async (): Promise<void> => {
     <Transition name="toast">
       <div
         v-if="showDeleteToast"
-        class="fixed bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background shadow-lg"
+        role="status"
+        class="fixed bottom-24 z-50 left-1/2 -translate-x-1/2 rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background shadow-lg"
       >
         Entry deleted
       </div>

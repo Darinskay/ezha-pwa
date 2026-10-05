@@ -33,8 +33,8 @@ const classes = computed(() =>
     props.variant === "destructive" &&
       "bg-destructive text-destructive-foreground shadow-[0_12px_24px_hsl(var(--destructive)/0.22)] hover:brightness-110",
     props.variant === "outline" && "border glass hover:brightness-[1.03]",
-    props.size === "sm" && "h-[2.125rem] px-3 text-xs sm:h-9 sm:px-3.5",
-    props.size === "md" && "h-10 px-3.5 sm:h-11 sm:px-4",
+    props.size === "sm" && "h-11 px-3 text-xs sm:h-11 sm:px-3.5",
+    props.size === "md" && "h-11 px-3.5 sm:h-11 sm:px-4",
     props.size === "lg" && "h-11 px-4 text-sm sm:h-12 sm:px-5 sm:text-base",
     props.class,
   ),
@@ -51,7 +51,7 @@ const classes = computed(() =>
         ? 'background: linear-gradient(142deg, hsl(var(--primary)), hsl(var(--secondary)));'
         : variant === 'secondary'
           ? 'border-color: hsl(var(--primary) / 0.24); background: linear-gradient(160deg, hsl(var(--feature-soft) / 0.72), hsl(var(--card) / 0.72));'
-        : variant === 'outline'
+          : variant === 'outline'
             ? 'border-color: hsl(var(--border) / 0.86);'
             : ''
     "

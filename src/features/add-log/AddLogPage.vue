@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import {
   TabsContent,
   TabsIndicator,
@@ -8,7 +8,7 @@ import {
   TabsRoot,
   TabsTrigger,
 } from "radix-vue";
-import { Trash2 } from "lucide-vue-next";
+import { Camera, BookMarked, Trash2 } from "lucide-vue-next";
 import { useQueryClient } from "@tanstack/vue-query";
 import { watchDebounced } from "@vueuse/core";
 import Button from "@/components/ui/Button.vue";
@@ -44,6 +44,7 @@ import {
   totalsFromLogItems,
   type LogMealItem,
 } from "@/features/add-log/log-meal-service";
+import { descriptionFromDraft } from "@/features/add-log/meal-input-helpers";
 import { formatMacro } from "@/lib/macros";
 import { parseNumberInput } from "@/lib/number";
 import { invalidateDailyDataQueries } from "@/query/invalidation";
@@ -55,11 +56,7 @@ import { syncDailySummaryForDate } from "@/services/day-summary-service";
 import { storageService } from "@/services/storage-service";
 import { useActiveDayStore } from "@/stores/active-day-store";
 import { currentUserId } from "@/lib/supabase";
-import type {
-  AIItemInput,
-  MacroEstimate,
-  SavedFoodDraft,
-} from "@/types/domain";
+import type { MacroEstimate, SavedFoodDraft } from "@/types/domain";
 
 interface DraftItem {
   id: string;
@@ -67,18 +64,14 @@ interface DraftItem {
   gramsText: string;
 }
 
-type LogWay = "camera" | "gallery" | "text";
-
 interface PendingDuplicate extends PendingLibraryDuplicate {
   onResolved?: () => Promise<void>;
 }
 
 interface AddLogDraft {
-  selectedLogWays: LogWay[];
-  selectedPhotoPicker: "camera" | "gallery" | null;
-  entryMode: "description" | "list";
+  entryMode?: "description" | "list";
   descriptionText: string;
-  items: DraftItem[];
+  items?: DraftItem[];
   logItems: LogMealItem[];
   isLabelPhoto: boolean;
   labelGramsText: string;
@@ -106,6 +99,9 @@ interface AddLogDraft {
   pendingEntryId: string | null;
   pendingImagePath: string | null;
   pendingLibrarySelectReturn?: boolean;
+  activeLogDate?: string;
+  analyzedInput?: string | null;
+  estimate?: MacroEstimate | null;
 }
 
 const props = withDefaults(
@@ -121,8 +117,9 @@ const props = withDefaults(
 );
 const emit = defineEmits<{
   close: [];
-  saved: [nextRouteName: "today" | "library"];
+  saved: [nextRouteName: "today" | "library", queued: boolean, notice: string];
   "select-library": [];
+  "busy-change": [busy: boolean];
 }>();
 
 const route = useRoute();
@@ -145,37 +142,47 @@ const activeLogDate = computed(() => {
 });
 const pageClass = computed(() =>
   props.embedded
-    ? "glass h-[90vh] w-full max-w-none overflow-y-auto rounded-t-card rounded-b-none p-3 sm:max-w-2xl sm:rounded-card sm:p-5 space-y-3 sm:space-y-4"
+    ? "glass flex h-[90dvh] w-full max-w-none flex-col gap-3 overflow-hidden rounded-t-card rounded-b-none p-3 sm:max-w-2xl sm:rounded-card sm:p-5"
     : "app-page feature feature-add-log",
 );
 const pageTitle = computed(() =>
-  mode.value === "log" ? (props.embedded ? "Log Meal" : "Add Log") : "Add Food",
+  mode.value === "log"
+    ? props.embedded
+      ? "Log meal"
+      : "Log meal"
+    : "Add Food",
 );
 const closePage = async (): Promise<void> => {
+  if (!(await persistDraft())) return;
   if (props.embedded) {
     emit("close");
     return;
   }
-  await router.back();
+  if (window.history.state?.back) router.back();
+  else
+    await router.replace({
+      name: mode.value === "library" ? "library" : "today",
+    });
 };
 
-const draftKey = computed(() => `add-log:${mode.value}`);
-const LOG_MODE_DRAFT_KEY = "add-log:log";
+const draftKey = computed(() =>
+  mode.value === "log"
+    ? `add-log:log:${activeLogDate.value}`
+    : "add-log:library",
+);
+const isHydrating = ref(true);
+const hasFinished = ref(false);
+let draftWrites: Promise<void> = Promise.resolve();
+let isDisposed = false;
+const analyzedInput = ref<string | null>(null);
 
-const selectedLogWays = ref<LogWay[]>(["text"]);
-const selectedPhotoPicker = ref<"camera" | "gallery" | null>(null);
-
-const entryMode = ref<"description" | "list">("description");
 const descriptionText = ref("");
-const items = ref<DraftItem[]>([
-  { id: crypto.randomUUID(), name: "", gramsText: "" },
-]);
 const logItems = ref<LogMealItem[]>([]);
+const reviewPanel = ref<InstanceType<typeof Card> | null>(null);
 const lastValidGramsByItemId = ref<Record<string, string>>({});
 const lastValidLibraryFoodGramsByFoodId = ref<Record<string, string>>({});
 
-const cameraFileInput = ref<HTMLInputElement | null>(null);
-const galleryFileInput = ref<HTMLInputElement | null>(null);
+const photoFileInput = ref<HTMLInputElement | null>(null);
 
 const selectedImageFile = ref<File | null>(null);
 const imagePreviewUrl = ref<string | null>(null);
@@ -194,6 +201,9 @@ const fatText = ref("");
 
 const isAnalyzing = ref(false);
 const isSaving = ref(false);
+watch([isAnalyzing, isSaving], ([analyzing, saving]) =>
+  emit("busy-change", analyzing || saving),
+);
 const errorMessage = ref<string | null>(null);
 const saveMessage = ref<string | null>(null);
 
@@ -217,13 +227,6 @@ const manualCaloriesText = ref("");
 const manualProteinText = ref("");
 const manualCarbsText = ref("");
 const manualFatText = ref("");
-
-const isLogWaySelected = (way: LogWay): boolean =>
-  selectedLogWays.value.includes(way);
-const isTextWaySelected = computed(() => isLogWaySelected("text"));
-const isPhotoWaySelected = computed(
-  () => isLogWaySelected("camera") || isLogWaySelected("gallery"),
-);
 
 const manualPerServingPreview = computed(() => {
   const calories = parseNumberInput(manualCaloriesText.value);
@@ -252,24 +255,28 @@ const manualPerServingPreview = computed(() => {
   };
 });
 
-const hasTextInput = computed(() => {
-  if (!isTextWaySelected.value) {
-    return false;
-  }
-  if (entryMode.value === "list") {
-    return items.value.some(
-      (item) => item.name.trim() || item.gramsText.trim(),
-    );
-  }
-  return !!descriptionText.value.trim();
-});
-
-const hasPhotoInput = computed(() => {
-  if (!isPhotoWaySelected.value) {
-    return false;
-  }
-  return !!selectedImageFile.value || !!pendingImagePath.value;
-});
+const hasTextInput = computed(() => !!descriptionText.value.trim());
+const hasPhotoInput = computed(
+  () => !!selectedImageFile.value || !!pendingImagePath.value,
+);
+const inputFingerprint = computed(() =>
+  JSON.stringify([
+    descriptionText.value.trim(),
+    selectedImageFile.value
+      ? [
+          selectedImageFile.value.name,
+          selectedImageFile.value.size,
+          selectedImageFile.value.lastModified,
+        ]
+      : pendingImagePath.value,
+    isLabelPhoto.value,
+  ]),
+);
+const needsAnalysis = computed(
+  () =>
+    (hasTextInput.value || hasPhotoInput.value) &&
+    analyzedInput.value !== inputFingerprint.value,
+);
 const hasAnyLogItems = computed(
   () => buildMealIngredientsFromLogItems(logItems.value).length > 0,
 );
@@ -282,7 +289,7 @@ const labelEditableItem = computed(() =>
 );
 
 const canAnalyze = computed(() => {
-  if (isAnalyzing.value) return false;
+  if (isHydrating.value || isAnalyzing.value) return false;
   if (isSaving.value) return false;
   if (mode.value === "library" && libraryEntryMode.value === "photo") {
     return hasPhotoInput.value;
@@ -291,7 +298,13 @@ const canAnalyze = computed(() => {
 });
 
 const canSaveLog = computed(() => {
-  return hasAnyLogItems.value && !isAnalyzing.value && !isSaving.value;
+  return (
+    !isHydrating.value &&
+    hasAnyLogItems.value &&
+    !needsAnalysis.value &&
+    !isAnalyzing.value &&
+    !isSaving.value
+  );
 });
 
 const suggestedLibraryName = computed(() =>
@@ -407,28 +420,14 @@ const clearImage = (): void => {
   imagePreviewUrl.value = null;
   pendingEntryId.value = null;
   pendingImagePath.value = null;
-  selectedPhotoPicker.value = null;
   isLabelPhoto.value = false;
+  if (photoFileInput.value) photoFileInput.value.value = "";
   labelGramsText.value = "";
   labelBaseEstimate = null;
 };
 
-const toggleLogWay = (way: LogWay): void => {
-  if (selectedLogWays.value.includes(way)) {
-    selectedLogWays.value = selectedLogWays.value.filter(
-      (current) => current !== way,
-    );
-    return;
-  }
-  selectedLogWays.value = [...selectedLogWays.value, way];
-};
-
-const pickFromCamera = (): void => {
-  cameraFileInput.value?.click();
-};
-
-const pickFromGallery = (): void => {
-  galleryFileInput.value?.click();
+const pickPhoto = (): void => {
+  photoFileInput.value?.click();
 };
 
 const setEstimate = (nextEstimate: MacroEstimate): void => {
@@ -479,40 +478,6 @@ const applyLabelScaling = (): void => {
   setEstimate(scaled);
 };
 
-const validateItemInputs = (
-  requireAtLeastOne: boolean,
-): AIItemInput[] | null => {
-  if (entryMode.value !== "list") return [];
-
-  const parsed: AIItemInput[] = [];
-
-  for (const item of items.value) {
-    const name = item.name.trim();
-    const gramsText = item.gramsText.trim();
-
-    if (!name && !gramsText) continue;
-    if (!name) {
-      errorMessage.value = "Please enter a food name for each item.";
-      return null;
-    }
-
-    const grams = parseMacro(gramsText);
-    if (!grams || grams <= 0) {
-      errorMessage.value = "Please enter grams for each item.";
-      return null;
-    }
-
-    parsed.push({ name, grams });
-  }
-
-  if (requireAtLeastOne && parsed.length === 0) {
-    errorMessage.value = "Add at least one food item or attach a photo.";
-    return null;
-  }
-
-  return parsed;
-};
-
 const replaceAiLogItems = (nextAiItems: LogMealItem[]): void => {
   const nonAiItems = logItems.value.filter((item) => item.origin !== "ai");
   logItems.value = [...nonAiItems, ...nextAiItems];
@@ -526,6 +491,9 @@ const removeLogItem = (id: string): void => {
 };
 
 const clearMealDraft = (): void => {
+  if (!window.confirm("Clear this meal draft and start again?")) return;
+  resetAddLogState();
+  analyzedInput.value = null;
   logItems.value = [];
   lastValidGramsByItemId.value = {};
   lastValidLibraryFoodGramsByFoodId.value = {};
@@ -560,10 +528,17 @@ const uploadIfNeeded = async (): Promise<string | null> => {
 const openLibrarySelector = async (): Promise<void> => {
   if (mode.value !== "log") return;
   const draft = buildDraftSnapshot();
-  await saveDraft(LOG_MODE_DRAFT_KEY, {
-    ...draft,
-    pendingLibrarySelectReturn: true,
-  } satisfies AddLogDraft);
+  try {
+    await draftWrites;
+    await saveDraft(draftKey.value, {
+      ...draft,
+      pendingLibrarySelectReturn: true,
+    } satisfies AddLogDraft);
+  } catch {
+    errorMessage.value =
+      "Your meal draft could not be saved. Please try opening the library again.";
+    return;
+  }
   if (props.embedded) {
     emit("select-library");
     return;
@@ -584,26 +559,15 @@ const analyze = async (): Promise<void> => {
 
   isAnalyzing.value = true;
   try {
-    const itemInputs =
-      mode.value === "log" && isTextWaySelected.value
-        ? validateItemInputs(entryMode.value === "list" && !hasPhotoInput.value)
-        : [];
-    if (!itemInputs) return;
-
-    const imagePath = isPhotoWaySelected.value ? await uploadIfNeeded() : null;
-    const text =
-      mode.value === "log" &&
-      isTextWaySelected.value &&
-      entryMode.value === "description"
-        ? descriptionText.value.trim()
-        : "";
-
+    const imagePath = await uploadIfNeeded();
+    const text = mode.value === "log" ? descriptionText.value.trim() : "";
+    const requestedInput = inputFingerprint.value;
     const nextEstimate = await aiAnalysisService.analyze({
       text: text || undefined,
-      items: itemInputs.length ? itemInputs : undefined,
       imagePath: imagePath ?? undefined,
       inputType: analysisInputType.value,
     });
+    analyzedInput.value = requestedInput;
 
     setEstimate(nextEstimate);
 
@@ -639,9 +603,11 @@ const analyze = async (): Promise<void> => {
         usedPhotoSource.value = true;
         usedPhotoMode.value = isLabelPhoto.value ? "label_photo" : "food_photo";
       }
-      if (isTextWaySelected.value && (text || itemInputs.length > 0)) {
+      if (text) {
         usedTextSource.value = true;
       }
+      await nextTick();
+      reviewPanel.value?.$el?.scrollIntoView?.({ block: "start" });
     }
   } catch (error) {
     errorMessage.value =
@@ -700,7 +666,11 @@ const resolveDuplicate = async (choice: DuplicateSaveChoice): Promise<void> => {
 
 const finishAndExit = async (
   nextRouteName: "today" | "library",
+  queued = false,
+  notice = "",
 ): Promise<void> => {
+  hasFinished.value = true;
+  await draftWrites;
   await clearDraft(draftKey.value);
   activeDayStore.setActiveDate(activeLogDate.value);
   await invalidateDailyDataQueries(queryClient, {
@@ -709,11 +679,17 @@ const finishAndExit = async (
   });
 
   if (props.embedded) {
-    emit("saved", nextRouteName);
+    emit("saved", nextRouteName, queued, notice);
     return;
   }
 
-  await router.replace({ name: nextRouteName });
+  await router.replace({
+    name: nextRouteName,
+    query:
+      nextRouteName === "today"
+        ? { logged: queued ? "queued" : "saved", ...(notice ? { notice } : {}) }
+        : {},
+  });
 };
 
 const saveLogEntry = async (): Promise<void> => {
@@ -730,8 +706,7 @@ const saveLogEntry = async (): Promise<void> => {
       (normalizeLogItemGrams(item.gramsText) ?? 0) > 0,
   );
   if (blockedItems.length > 0) {
-    errorMessage.value =
-      "[PLACEHOLDER] Remove blocked items with missing nutrition before saving.";
+    errorMessage.value = "Remove items with missing nutrition before logging.";
     return;
   }
 
@@ -804,17 +779,27 @@ const saveLogEntry = async (): Promise<void> => {
       }
     }
 
+    let notice = "";
     if (saveToLibrary.value) {
-      await savedFoodRepository.insertMeal(
-        libraryName.value.trim(),
-        buildMealIngredientsFromLogItems(logItems.value),
-      );
+      try {
+        await savedFoodRepository.insertMeal(
+          libraryName.value.trim(),
+          buildMealIngredientsFromLogItems(logItems.value),
+        );
+      } catch {
+        notice = "The library copy could not be saved. Your meal log is kept.";
+      }
     }
-
     if (!queuedForRetry) {
-      await syncDailySummaryForDate(activeDate);
+      try {
+        await syncDailySummaryForDate(activeDate);
+      } catch {
+        notice = [notice, "Daily totals will refresh when you reconnect."]
+          .filter(Boolean)
+          .join(" ");
+      }
     }
-    await finishAndExit("today");
+    await finishAndExit("today", queuedForRetry, notice);
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : "Unable to save entry.";
@@ -890,29 +875,15 @@ const saveLibraryFromEstimate = async (): Promise<void> => {
   }
 };
 
-const onFilePicked = (
-  event: Event,
-  source: "camera" | "gallery" | null = null,
-): void => {
+const onFilePicked = (event: Event): void => {
   const target = event.target as HTMLInputElement;
   const file = target.files?.[0] ?? null;
   if (!file) return;
 
   clearImage();
-  selectedPhotoPicker.value = source;
   selectedImageFile.value = file;
   imagePreviewUrl.value = URL.createObjectURL(file);
-};
-
-const addItemRow = (): void => {
-  items.value.push({ id: crypto.randomUUID(), name: "", gramsText: "" });
-};
-
-const removeItemRow = (id: string): void => {
-  items.value = items.value.filter((item) => item.id !== id);
-  if (items.value.length === 0) {
-    items.value = [{ id: crypto.randomUUID(), name: "", gramsText: "" }];
-  }
+  target.value = "";
 };
 
 const applyLabelMacroEdits = (): void => {
@@ -954,11 +925,7 @@ const resetAddLogState = (): void => {
   pendingEntryId.value = null;
   pendingImagePath.value = null;
 
-  selectedLogWays.value = ["text"];
-  selectedPhotoPicker.value = null;
-  entryMode.value = "description";
   descriptionText.value = "";
-  items.value = [{ id: crypto.randomUUID(), name: "", gramsText: "" }];
   logItems.value = [];
   lastValidGramsByItemId.value = {};
   lastValidLibraryFoodGramsByFoodId.value = {};
@@ -992,6 +959,8 @@ const applyDraftSnapshot = (draft: AddLogDraft): void => {
   if (imagePreviewUrl.value) {
     URL.revokeObjectURL(imagePreviewUrl.value);
   }
+  estimate.value = draft.estimate ?? null;
+  labelBaseEstimate = draft.isLabelPhoto ? (draft.estimate ?? null) : null;
   selectedImageFile.value = draft.selectedImageFile ?? null;
   pendingEntryId.value = draft.pendingEntryId ?? null;
   pendingImagePath.value = draft.pendingImagePath ?? null;
@@ -999,15 +968,8 @@ const applyDraftSnapshot = (draft: AddLogDraft): void => {
     ? URL.createObjectURL(selectedImageFile.value)
     : null;
 
-  selectedLogWays.value = draft.selectedLogWays?.length
-    ? draft.selectedLogWays
-    : ["text"];
-  selectedPhotoPicker.value = draft.selectedPhotoPicker ?? null;
-  entryMode.value = draft.entryMode;
-  descriptionText.value = draft.descriptionText;
-  items.value = draft.items.length
-    ? draft.items
-    : [{ id: crypto.randomUUID(), name: "", gramsText: "" }];
+  descriptionText.value = descriptionFromDraft(draft);
+  analyzedInput.value = draft.analyzedInput ?? null;
   logItems.value = draft.logItems ?? [];
   syncRememberedLogItemGrams();
   isLabelPhoto.value = draft.isLabelPhoto;
@@ -1035,11 +997,12 @@ const applyDraftSnapshot = (draft: AddLogDraft): void => {
 };
 
 const buildDraftSnapshot = (): AddLogDraft => ({
-  selectedLogWays: selectedLogWays.value,
-  selectedPhotoPicker: selectedPhotoPicker.value,
-  entryMode: entryMode.value,
+  activeLogDate: activeLogDate.value,
+  analyzedInput: analyzedInput.value,
+  estimate: estimate.value,
+  entryMode: "description",
   descriptionText: descriptionText.value,
-  items: items.value,
+  items: [],
   logItems: logItems.value,
   isLabelPhoto: isLabelPhoto.value,
   labelGramsText: labelGramsText.value,
@@ -1069,51 +1032,64 @@ const buildDraftSnapshot = (): AddLogDraft => ({
 });
 
 const hydrateFromDraft = async (): Promise<void> => {
-  if (mode.value === "log") {
-    const logDraft = await loadDraft<AddLogDraft>(LOG_MODE_DRAFT_KEY);
-    if (!logDraft?.pendingLibrarySelectReturn) {
-      resetAddLogState();
-      await clearDraft(LOG_MODE_DRAFT_KEY);
-      return;
+  isHydrating.value = true;
+  analyzedInput.value = null;
+  try {
+    let draft = await loadDraft<AddLogDraft>(draftKey.value);
+    if (!draft && mode.value === "log") {
+      const legacy = await loadDraft<AddLogDraft>("add-log:log");
+      if (
+        legacy &&
+        (!legacy.activeLogDate || legacy.activeLogDate === activeLogDate.value)
+      ) {
+        draft = legacy;
+        await saveDraft(draftKey.value, {
+          ...legacy,
+          activeLogDate: activeLogDate.value,
+        });
+        await clearDraft("add-log:log");
+      }
     }
-
-    applyDraftSnapshot(logDraft);
-    await clearDraft(LOG_MODE_DRAFT_KEY);
-    return;
+    if (draft) applyDraftSnapshot(draft);
+    else resetAddLogState();
+  } catch {
+    errorMessage.value =
+      "Your draft could not be restored. Please try reopening the logger.";
+  } finally {
+    isHydrating.value = false;
   }
-
-  const draft = await loadDraft<AddLogDraft>(draftKey.value);
-  if (!draft) {
-    resetAddLogState();
-    return;
-  }
-
-  applyDraftSnapshot(draft);
 };
 
-const persistDraft = async (): Promise<void> => {
-  if (mode.value === "log") {
-    return;
+const persistDraft = async (): Promise<boolean> => {
+  if (isDisposed || isHydrating.value || hasFinished.value) return true;
+  const key = draftKey.value;
+  const snapshot = buildDraftSnapshot();
+  draftWrites = draftWrites
+    .catch(() => {})
+    .then(() => saveDraft(key, snapshot));
+  try {
+    await draftWrites;
+    return true;
+  } catch {
+    errorMessage.value =
+      "Your draft could not be saved on this device. Keep this screen open to avoid losing it.";
+    return false;
   }
-
-  await saveDraft(draftKey.value, buildDraftSnapshot());
 };
 
-watch(
-  mode,
-  async () => {
-    await hydrateFromDraft();
-  },
-  { immediate: true },
-);
+watch(draftKey, hydrateFromDraft, { immediate: true });
+onBeforeRouteLeave(async () => await persistDraft());
+const saveBeforePageHide = (): void => {
+  void persistDraft();
+};
+onMounted(() => window.addEventListener("pagehide", saveBeforePageHide));
 
 watchDebounced(
   [
-    selectedLogWays,
-    selectedPhotoPicker,
-    entryMode,
+    selectedImageFile,
+    analyzedInput,
+    estimate,
     descriptionText,
-    items,
     logItems,
     isLabelPhoto,
     labelGramsText,
@@ -1196,7 +1172,11 @@ watch(
   { immediate: true, deep: true },
 );
 
+defineExpose({ persistDraft });
+
 onUnmounted(() => {
+  isDisposed = true;
+  window.removeEventListener("pagehide", saveBeforePageHide);
   if (imagePreviewUrl.value) {
     URL.revokeObjectURL(imagePreviewUrl.value);
   }
@@ -1204,7 +1184,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section :class="pageClass">
+  <section class="feature feature-add-log" :class="pageClass">
     <header class="flex items-start justify-between gap-3">
       <div class="page-header">
         <h1 class="page-title">
@@ -1213,557 +1193,525 @@ onUnmounted(() => {
         <p class="page-subtitle">
           {{
             mode === "log"
-              ? "Log with AI, photo, or saved library items."
+              ? `Logging for ${activeLogDate}.`
               : "Save foods to your library."
           }}
         </p>
       </div>
-      <Button variant="ghost" size="sm" @click="closePage">Close</Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        :disabled="isAnalyzing || isSaving"
+        @click="closePage"
+        >Close</Button
+      >
     </header>
+    <div
+      :class="
+        embedded ? 'min-h-0 flex-1 space-y-3 overflow-y-auto' : 'space-y-3'
+      "
+    >
+      <Card v-if="mode === 'library'" class="space-y-4 p-3 sm:p-5">
+        <TabsRoot v-model="libraryEntryMode">
+          <TabsList class="ios-segment">
+            <TabsTrigger value="photo" class="ios-segment-trigger">
+              Photo
+            </TabsTrigger>
+            <TabsTrigger value="manual" class="ios-segment-trigger">
+              Manual
+            </TabsTrigger>
+          </TabsList>
+          <TabsIndicator
+            class="h-[2px] bg-[hsl(var(--feature-primary))] transition-all"
+          />
 
-    <Card v-if="mode === 'log'" class="glass space-y-4 p-3 sm:p-5">
-      <div class="space-y-2">
-        <p
-          class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+          <TabsContent value="manual" class="mt-4 space-y-3">
+            <div class="space-y-1">
+              <label
+                class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                >Food name</label
+              >
+              <Input
+                :model-value="libraryName"
+                placeholder="e.g. Apple"
+                @update:modelValue="onLibraryNameInput"
+              />
+            </div>
+
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div class="space-y-1">
+                <label
+                  class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                  >Unit type</label
+                >
+                <SelectField v-model="manualUnitType">
+                  <option value="per_100g">Per 100g</option>
+                  <option value="per_serving">Per serving</option>
+                </SelectField>
+              </div>
+
+              <template v-if="manualUnitType === 'per_serving'">
+                <div class="space-y-1">
+                  <label
+                    class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                    >Serving grams</label
+                  >
+                  <Input
+                    v-model="manualServingSizeText"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                  />
+                </div>
+                <div class="space-y-1">
+                  <label
+                    class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                    >Serving unit</label
+                  >
+                  <Input v-model="manualServingUnit" />
+                </div>
+              </template>
+            </div>
+
+            <p class="text-sm font-medium">Nutrition per 100 g</p>
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div class="space-y-1">
+                <label
+                  class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                  >Calories</label
+                >
+                <Input
+                  v-model="manualCaloriesText"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                />
+              </div>
+              <div class="space-y-1">
+                <label
+                  class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                  >Protein</label
+                >
+                <Input
+                  v-model="manualProteinText"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                />
+              </div>
+              <div class="space-y-1">
+                <label
+                  class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                  >Carbs</label
+                >
+                <Input
+                  v-model="manualCarbsText"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                />
+              </div>
+              <div class="space-y-1">
+                <label
+                  class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                  >Fat</label
+                >
+                <Input
+                  v-model="manualFatText"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                />
+              </div>
+            </div>
+
+            <p
+              v-if="manualPerServingPreview && manualUnitType === 'per_serving'"
+              class="rounded-thumb border border-white/50 bg-white/40 px-3 py-2 text-xs text-muted-foreground dark:border-border/20 dark:bg-card/30"
+            >
+              Per serving:
+              {{ formatMacro(manualPerServingPreview.calories, 1) }} kcal · P{{
+                formatMacro(manualPerServingPreview.protein, 1)
+              }}
+              · C{{ formatMacro(manualPerServingPreview.carbs, 1) }} · F{{
+                formatMacro(manualPerServingPreview.fat, 1)
+              }}
+            </p>
+
+            <Button
+              class="w-full sm:w-auto"
+              :loading="isSaving"
+              @click="saveManualLibrary"
+              >Save to Library</Button
+            >
+          </TabsContent>
+        </TabsRoot>
+      </Card>
+
+      <Card
+        v-if="mode === 'log' || libraryEntryMode === 'photo'"
+        class="space-y-3 p-3 sm:p-5"
+      >
+        <div
+          class="grid gap-2"
+          :class="mode === 'log' ? 'grid-cols-2' : 'grid-cols-1'"
         >
-          Choose how to log
-        </p>
-        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Button
-            size="sm"
-            :variant="isLogWaySelected('camera') ? 'default' : 'outline'"
-            @click="toggleLogWay('camera')"
+            variant="secondary"
+            :disabled="isHydrating || isAnalyzing || isSaving"
+            @click="pickPhoto"
           >
-            Camera
+            <Camera class="size-4" aria-hidden="true" />{{
+              imagePreviewUrl ? "Change photo" : "Photo"
+            }}
           </Button>
           <Button
-            size="sm"
-            :variant="isLogWaySelected('gallery') ? 'default' : 'outline'"
-            @click="toggleLogWay('gallery')"
+            v-if="mode === 'log'"
+            variant="secondary"
+            :disabled="isHydrating || isAnalyzing || isSaving"
+            @click="openLibrarySelector"
           >
-            Gallery
-          </Button>
-          <Button
-            size="sm"
-            :variant="isLogWaySelected('text') ? 'default' : 'outline'"
-            @click="toggleLogWay('text')"
-          >
-            Text
-          </Button>
-          <Button size="sm" variant="secondary" @click="openLibrarySelector">
-            Add from Library
+            <BookMarked class="size-4" aria-hidden="true" />Library
           </Button>
         </div>
-      </div>
-    </Card>
-
-    <Card v-if="mode === 'library'" class="space-y-4 p-3 sm:p-5">
-      <TabsRoot v-model="libraryEntryMode">
-        <TabsList class="ios-segment">
-          <TabsTrigger value="photo" class="ios-segment-trigger">
-            Photo
-          </TabsTrigger>
-          <TabsTrigger value="manual" class="ios-segment-trigger">
-            Manual
-          </TabsTrigger>
-        </TabsList>
-        <TabsIndicator
-          class="h-[2px] bg-[hsl(var(--feature-primary))] transition-all"
+        <input
+          ref="photoFileInput"
+          type="file"
+          accept="image/*"
+          class="hidden"
+          @change="onFilePicked"
         />
+        <div v-if="mode === 'log'" class="space-y-2">
+          <label for="meal-description" class="text-sm font-medium"
+            >What did you eat?
+            <span class="font-normal text-muted-foreground">{{
+              hasPhotoInput ? "(optional)" : ""
+            }}</span></label
+          >
+          <Textarea
+            id="meal-description"
+            v-model="descriptionText"
+            :disabled="isHydrating || isAnalyzing || isSaving"
+            :rows="3"
+            placeholder="e.g. 150g chicken, rice and a little olive oil"
+          />
+        </div>
+        <div class="space-y-2">
+          <img
+            v-if="imagePreviewUrl"
+            :src="imagePreviewUrl"
+            alt="Selected meal photo"
+            class="max-h-56 w-full rounded-xl border border-border/80 object-cover"
+          />
+          <div class="flex flex-wrap items-center gap-2">
+            <Button
+              v-if="imagePreviewUrl"
+              size="sm"
+              variant="ghost"
+              :disabled="isAnalyzing || isSaving"
+              @click="clearImage"
+              >Remove photo</Button
+            >
+            <label
+              v-if="imagePreviewUrl"
+              class="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground"
+            >
+              <input
+                v-model="isLabelPhoto"
+                :disabled="isAnalyzing || isSaving"
+                type="checkbox"
+                class="size-4 rounded border-border accent-primary"
+              />
+              This is a nutrition label
+            </label>
+          </div>
 
-        <TabsContent value="manual" class="mt-4 space-y-3">
+          <Input
+            v-if="imagePreviewUrl && isLabelPhoto"
+            v-model="labelGramsText"
+            type="number"
+            min="0"
+            step="0.1"
+            placeholder="Grams eaten (optional)"
+          />
+        </div>
+
+        <Button
+          v-if="mode === 'library'"
+          class="w-full sm:w-auto"
+          :loading="isAnalyzing"
+          :disabled="!canAnalyze"
+          @click="analyze"
+        >
+          Estimate nutrition
+        </Button>
+      </Card>
+
+      <Card
+        ref="reviewPanel"
+        v-if="mode === 'library' ? !!estimate : logItems.length > 0"
+        class="space-y-4 p-3 sm:p-5"
+      >
+        <div
+          v-if="mode === 'library'"
+          class="grid grid-cols-2 gap-2 sm:grid-cols-4"
+        >
           <div class="space-y-1">
             <label
               class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
-              >Food name</label
+              >Calories</label
             >
+            <Input v-model="caloriesText" type="number" min="0" step="0.1" />
+          </div>
+          <div class="space-y-1">
+            <label
+              class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+              >Protein</label
+            >
+            <Input v-model="proteinText" type="number" min="0" step="0.1" />
+          </div>
+          <div class="space-y-1">
+            <label
+              class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+              >Carbs</label
+            >
+            <Input v-model="carbsText" type="number" min="0" step="0.1" />
+          </div>
+          <div class="space-y-1">
+            <label
+              class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+              >Fat</label
+            >
+            <Input v-model="fatText" type="number" min="0" step="0.1" />
+          </div>
+        </div>
+
+        <template v-if="mode === 'log'">
+          <h2 class="text-base font-semibold">Review meal</h2>
+          <p
+            v-if="logItems.some((item) => item.origin === 'ai')"
+            class="text-xs text-muted-foreground"
+          >
+            Estimated nutrition. Adjust quantities before logging.
+          </p>
+          <article
+            v-for="item in logItems"
+            :key="item.id"
+            class="glass space-y-2 rounded-card p-3"
+          >
+            <div class="flex items-start justify-between gap-2">
+              <h4 class="text-sm font-semibold">{{ item.name }}</h4>
+              <Button
+                variant="ghost"
+                size="sm"
+                class="size-11 rounded-full p-0 text-destructive"
+                :disabled="isAnalyzing || isSaving"
+                :aria-label="`Remove ${item.name}`"
+                @click="removeLogItem(item.id)"
+              >
+                <Trash2 class="size-4" />
+              </Button>
+            </div>
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div class="space-y-1">
+                <label
+                  class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+                  >Grams (g)</label
+                >
+                <div class="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    :disabled="isAnalyzing || isSaving"
+                    :aria-label="`Decrease grams for ${item.name}`"
+                    @click="adjustLogItemGrams(item, -5)"
+                    >-</Button
+                  >
+                  <Input
+                    v-model="item.gramsText"
+                    :disabled="isAnalyzing || isSaving"
+                    :aria-label="`Grams for ${item.name}`"
+                    inputmode="decimal"
+                    type="number"
+                    min="0"
+                    :max="String(MAX_LOG_ITEM_GRAMS)"
+                    step="0.1"
+                    placeholder="Grams (g)"
+                    @blur="normalizeLogItemGramsText(item)"
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    :disabled="isAnalyzing || isSaving"
+                    :aria-label="`Increase grams for ${item.name}`"
+                    @click="adjustLogItemGrams(item, 5)"
+                    >+</Button
+                  >
+                </div>
+              </div>
+              <p
+                class="rounded-thumb border border-white/50 bg-white/40 px-3 py-2 text-xs text-muted-foreground dark:border-border/20 dark:bg-card/30"
+              >
+                {{ formatMacro(macrosFromLogItem(item).calories, 1) }} kcal ·
+                P{{ formatMacro(macrosFromLogItem(item).protein, 1) }} · C{{
+                  formatMacro(macrosFromLogItem(item).carbs, 1)
+                }}
+                · F{{ formatMacro(macrosFromLogItem(item).fat, 1) }}
+              </p>
+            </div>
+            <p
+              v-if="item.isNutritionMissing"
+              class="rounded-thumb border border-primary/20 bg-primary/10 px-3 py-2 text-xs text-primary"
+            >
+              Nutrition is missing. Remove this item to log the rest of your
+              meal.
+            </p>
+          </article>
+
+          <div
+            class="rounded-thumb border border-white/50 bg-white/40 p-3 text-sm dark:border-border/20 dark:bg-card/30"
+          >
+            Total: {{ formatMacro(logTotals.calories, 1) }} kcal · P{{
+              formatMacro(logTotals.protein, 1)
+            }}g · C{{ formatMacro(logTotals.carbs, 1) }}g · F{{
+              formatMacro(logTotals.fat, 1)
+            }}g
+          </div>
+
+          <div v-if="labelEditableItem" class="space-y-2">
+            <p
+              class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
+            >
+              Label macro overrides
+            </p>
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Input
+                v-model="caloriesText"
+                type="number"
+                min="0"
+                step="0.1"
+                placeholder="Calories"
+              />
+              <Input
+                v-model="proteinText"
+                type="number"
+                min="0"
+                step="0.1"
+                placeholder="Protein"
+              />
+              <Input
+                v-model="carbsText"
+                type="number"
+                min="0"
+                step="0.1"
+                placeholder="Carbs"
+              />
+              <Input
+                v-model="fatText"
+                type="number"
+                min="0"
+                step="0.1"
+                placeholder="Fat"
+              />
+            </div>
+            <Button size="sm" variant="secondary" @click="applyLabelMacroEdits"
+              >Apply label macros</Button
+            >
+          </div>
+
+          <p
+            v-if="gramsValidationMessage"
+            class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {{ gramsValidationMessage }}
+          </p>
+
+          <div class="space-y-2">
+            <label class="inline-flex min-h-11 items-center gap-2 text-sm">
+              <input
+                v-model="saveToLibrary"
+                :disabled="isSaving"
+                type="checkbox"
+                class="size-4 rounded border-border accent-primary"
+              />
+              Save this meal to Library
+            </label>
             <Input
+              v-if="saveToLibrary"
+              :disabled="isSaving"
+              aria-label="Meal name for Library"
               :model-value="libraryName"
-              placeholder="e.g. Apple"
+              placeholder="Meal name"
               @update:modelValue="onLibraryNameInput"
             />
           </div>
+        </template>
 
-          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div class="space-y-1">
-              <label
-                class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
-                >Unit type</label
-              >
-              <SelectField v-model="manualUnitType">
-                <option value="per_100g">Per 100g</option>
-                <option value="per_serving">Per serving</option>
-              </SelectField>
-            </div>
-
-            <template v-if="manualUnitType === 'per_serving'">
-              <div class="space-y-1">
-                <label
-                  class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
-                  >Serving grams</label
-                >
-                <Input
-                  v-model="manualServingSizeText"
-                  type="number"
-                  min="0"
-                  step="0.1"
-                />
-              </div>
-              <div class="space-y-1">
-                <label
-                  class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
-                  >Serving unit</label
-                >
-                <Input v-model="manualServingUnit" />
-              </div>
-            </template>
-          </div>
-
-          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <div class="space-y-1">
-              <label
-                class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
-                >Calories</label
-              >
-              <Input
-                v-model="manualCaloriesText"
-                type="number"
-                min="0"
-                step="0.1"
-              />
-            </div>
-            <div class="space-y-1">
-              <label
-                class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
-                >Protein</label
-              >
-              <Input
-                v-model="manualProteinText"
-                type="number"
-                min="0"
-                step="0.1"
-              />
-            </div>
-            <div class="space-y-1">
-              <label
-                class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
-                >Carbs</label
-              >
-              <Input
-                v-model="manualCarbsText"
-                type="number"
-                min="0"
-                step="0.1"
-              />
-            </div>
-            <div class="space-y-1">
-              <label
-                class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
-                >Fat</label
-              >
-              <Input v-model="manualFatText" type="number" min="0" step="0.1" />
-            </div>
-          </div>
-
-          <p
-            v-if="manualPerServingPreview && manualUnitType === 'per_serving'"
-            class="rounded-thumb border border-white/50 bg-white/40 px-3 py-2 text-xs text-muted-foreground dark:border-border/20 dark:bg-card/30"
-          >
-            Per serving:
-            {{ formatMacro(manualPerServingPreview.calories, 1) }} kcal · P{{
-              formatMacro(manualPerServingPreview.protein, 1)
-            }}
-            · C{{ formatMacro(manualPerServingPreview.carbs, 1) }} · F{{
-              formatMacro(manualPerServingPreview.fat, 1)
-            }}
-          </p>
-
+        <div v-if="mode === 'library'" class="space-y-2">
+          <Input
+            :model-value="libraryName"
+            placeholder="Food name for library"
+            @update:modelValue="onLibraryNameInput"
+          />
           <Button
             class="w-full sm:w-auto"
             :loading="isSaving"
-            @click="saveManualLibrary"
+            @click="saveLibraryFromEstimate"
             >Save to Library</Button
           >
-        </TabsContent>
-      </TabsRoot>
-    </Card>
-
-    <Card
-      v-if="
-        mode === 'log'
-          ? isTextWaySelected || isPhotoWaySelected
-          : libraryEntryMode === 'photo'
-      "
-      class="space-y-4 p-3 sm:p-5"
-    >
-      <TabsRoot v-if="mode === 'log' && isTextWaySelected" v-model="entryMode">
-        <TabsList class="ios-segment">
-          <TabsTrigger value="description" class="ios-segment-trigger">
-            Description
-          </TabsTrigger>
-          <TabsTrigger value="list" class="ios-segment-trigger">
-            List
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="description" class="mt-4">
-          <Textarea
-            v-model="descriptionText"
-            :rows="4"
-            placeholder="Describe your meal. Example: chicken with rice, 250g"
-          />
-        </TabsContent>
-
-        <TabsContent value="list" class="mt-4 space-y-2">
-          <article
-            v-for="item in items"
-            :key="item.id"
-            class="grid grid-cols-12 gap-2 rounded-thumb border border-white/50 bg-white/40 p-2 dark:border-border/20 dark:bg-card/30"
-          >
-            <Input
-              v-model="item.name"
-              class="col-span-7"
-              placeholder="Food name"
-            />
-            <Input
-              v-model="item.gramsText"
-              class="col-span-4"
-              type="number"
-              min="0"
-              step="0.1"
-              placeholder="Grams (g)"
-            />
-            <Button
-              variant="ghost"
-              class="col-span-1 px-0"
-              @click="removeItemRow(item.id)"
-              >×</Button
-            >
-          </article>
-          <Button size="sm" variant="secondary" @click="addItemRow"
-            >Add item</Button
-          >
-        </TabsContent>
-      </TabsRoot>
-
-      <div v-if="mode === 'library' || isPhotoWaySelected" class="space-y-2">
-        <label
-          class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
-          >Photo (optional)</label
-        >
-        <template v-if="mode === 'log'">
-          <div class="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              :disabled="!isLogWaySelected('camera')"
-              @click="pickFromCamera"
-            >
-              Open Camera
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              :disabled="!isLogWaySelected('gallery')"
-              @click="pickFromGallery"
-            >
-              Open Gallery
-            </Button>
-          </div>
-          <input
-            ref="cameraFileInput"
-            type="file"
-            accept="image/*"
-            capture="environment"
-            class="hidden"
-            @change="(event) => onFilePicked(event, 'camera')"
-          />
-          <input
-            ref="galleryFileInput"
-            type="file"
-            accept="image/*"
-            class="hidden"
-            @change="(event) => onFilePicked(event, 'gallery')"
-          />
-          <p v-if="selectedPhotoPicker" class="text-xs text-muted-foreground">
-            Selected source:
-            {{ selectedPhotoPicker === "camera" ? "Camera" : "Gallery" }}
-          </p>
-        </template>
-        <input
-          v-else
-          type="file"
-          accept="image/*"
-          class="block w-full rounded-thumb border border-white/60 bg-white/50 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-primary-foreground dark:border-border/20 dark:bg-card/30"
-          @change="onFilePicked"
-        />
-        <img
-          v-if="imagePreviewUrl"
-          :src="imagePreviewUrl"
-          alt="Selected meal photo"
-          class="max-h-56 w-full rounded-xl border border-border/80 object-cover"
-        />
-        <div class="flex flex-wrap items-center gap-2">
-          <Button
-            v-if="imagePreviewUrl"
-            size="sm"
-            variant="ghost"
-            @click="clearImage"
-            >Remove photo</Button
-          >
-          <label
-            v-if="imagePreviewUrl"
-            class="inline-flex items-center gap-2 text-sm text-muted-foreground"
-          >
-            <input
-              v-model="isLabelPhoto"
-              type="checkbox"
-              class="size-4 rounded border-border accent-primary"
-            />
-            This is a nutrition label
-          </label>
         </div>
+      </Card>
 
-        <Input
-          v-if="imagePreviewUrl && isLabelPhoto"
-          v-model="labelGramsText"
-          type="number"
-          min="0"
-          step="0.1"
-          placeholder="Grams eaten (optional)"
-        />
-      </div>
+      <p
+        v-if="errorMessage"
+        role="alert"
+        class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+      >
+        {{ errorMessage }}
+      </p>
+      <p
+        v-if="saveMessage"
+        class="rounded-xl border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary"
+      >
+        {{ saveMessage }}
+      </p>
 
       <Button
-        v-if="mode === 'library' || isTextWaySelected || isPhotoWaySelected"
-        class="w-full sm:w-auto"
-        :loading="isAnalyzing"
-        :disabled="!canAnalyze"
-        @click="analyze"
+        v-if="
+          mode === 'log' && (logItems.length || hasTextInput || hasPhotoInput)
+        "
+        variant="ghost"
+        :disabled="isSaving || isAnalyzing"
+        @click="clearMealDraft"
+        >Clear draft</Button
       >
-        Analyze
+    </div>
+    <div
+      v-if="mode === 'log'"
+      :class="
+        embedded ? 'shrink-0' : 'fixed inset-x-3 bottom-3 mx-auto max-w-5xl'
+      "
+      class="glass z-10 space-y-2 rounded-card p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]"
+    >
+      <p
+        v-if="logItems.length && needsAnalysis"
+        class="text-xs text-muted-foreground"
+      >
+        Your photo or description changed. Update the estimate before logging.
+      </p>
+      <Button
+        class="w-full"
+        :loading="isAnalyzing || isSaving"
+        :disabled="isHydrating || (needsAnalysis ? !canAnalyze : !canSaveLog)"
+        @click="needsAnalysis ? analyze() : saveLogEntry()"
+      >
+        {{
+          needsAnalysis || !logItems.length
+            ? "Estimate nutrition"
+            : `Log meal · ${Math.round(logTotals.calories)} kcal`
+        }}
       </Button>
-    </Card>
-
-    <Card
-      v-if="mode === 'library' ? !!estimate : logItems.length > 0"
-      class="space-y-4 p-3 sm:p-5"
-    >
-      <div
-        v-if="mode === 'library'"
-        class="grid grid-cols-2 gap-2 sm:grid-cols-4"
-      >
-        <div class="space-y-1">
-          <label
-            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
-            >Calories</label
-          >
-          <Input v-model="caloriesText" type="number" min="0" step="0.1" />
-        </div>
-        <div class="space-y-1">
-          <label
-            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
-            >Protein</label
-          >
-          <Input v-model="proteinText" type="number" min="0" step="0.1" />
-        </div>
-        <div class="space-y-1">
-          <label
-            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
-            >Carbs</label
-          >
-          <Input v-model="carbsText" type="number" min="0" step="0.1" />
-        </div>
-        <div class="space-y-1">
-          <label
-            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
-            >Fat</label
-          >
-          <Input v-model="fatText" type="number" min="0" step="0.1" />
-        </div>
-      </div>
-
-      <template v-if="mode === 'log'">
-        <article
-          v-for="item in logItems"
-          :key="item.id"
-          class="glass space-y-2 rounded-card p-3"
-        >
-          <div class="flex items-start justify-between gap-2">
-            <h4 class="text-sm font-semibold">{{ item.name }}</h4>
-            <Button
-              variant="ghost"
-              size="sm"
-              class="h-8 w-8 rounded-full p-0 text-destructive"
-              :aria-label="`Remove ${item.name}`"
-              @click="removeLogItem(item.id)"
-            >
-              <Trash2 class="size-4" />
-            </Button>
-          </div>
-          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div class="space-y-1">
-              <label
-                class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
-                >Grams (g)</label
-              >
-              <div class="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  @click="adjustLogItemGrams(item, -5)"
-                  >-</Button
-                >
-                <Input
-                  v-model="item.gramsText"
-                  type="number"
-                  min="0"
-                  :max="String(MAX_LOG_ITEM_GRAMS)"
-                  step="0.1"
-                  placeholder="Grams (g)"
-                  @blur="normalizeLogItemGramsText(item)"
-                />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  @click="adjustLogItemGrams(item, 5)"
-                  >+</Button
-                >
-              </div>
-            </div>
-            <p
-              class="rounded-thumb border border-white/50 bg-white/40 px-3 py-2 text-xs text-muted-foreground dark:border-border/20 dark:bg-card/30"
-            >
-              {{ formatMacro(macrosFromLogItem(item).calories, 1) }} kcal · P{{
-                formatMacro(macrosFromLogItem(item).protein, 1)
-              }}
-              · C{{ formatMacro(macrosFromLogItem(item).carbs, 1) }} · F{{
-                formatMacro(macrosFromLogItem(item).fat, 1)
-              }}
-            </p>
-          </div>
-          <p
-            v-if="item.isNutritionMissing"
-            class="rounded-thumb border border-primary/20 bg-primary/10 px-3 py-2 text-xs text-primary"
-          >
-            [PLACEHOLDER] Missing nutrition fields for this template item. It is
-            blocked from save.
-          </p>
-        </article>
-
-        <div class="rounded-thumb border border-white/50 bg-white/40 p-3 text-sm dark:border-border/20 dark:bg-card/30">
-          Total: {{ formatMacro(logTotals.calories, 1) }} kcal · P{{
-            formatMacro(logTotals.protein, 1)
-          }}g · C{{ formatMacro(logTotals.carbs, 1) }}g · F{{
-            formatMacro(logTotals.fat, 1)
-          }}g
-        </div>
-
-        <div v-if="labelEditableItem" class="space-y-2">
-          <p
-            class="text-xs font-medium uppercase tracking-[0.03em] text-muted-foreground"
-          >
-            Label macro overrides
-          </p>
-          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Input
-              v-model="caloriesText"
-              type="number"
-              min="0"
-              step="0.1"
-              placeholder="Calories"
-            />
-            <Input
-              v-model="proteinText"
-              type="number"
-              min="0"
-              step="0.1"
-              placeholder="Protein"
-            />
-            <Input
-              v-model="carbsText"
-              type="number"
-              min="0"
-              step="0.1"
-              placeholder="Carbs"
-            />
-            <Input
-              v-model="fatText"
-              type="number"
-              min="0"
-              step="0.1"
-              placeholder="Fat"
-            />
-          </div>
-          <Button size="sm" variant="secondary" @click="applyLabelMacroEdits"
-            >Apply label macros</Button
-          >
-        </div>
-
-        <p
-          v-if="gramsValidationMessage"
-          class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-        >
-          {{ gramsValidationMessage }}
-        </p>
-
-        <div class="space-y-2">
-          <label class="inline-flex items-center gap-2 text-sm">
-            <input
-              v-model="saveToLibrary"
-              type="checkbox"
-              class="size-4 rounded border-border accent-primary"
-            />
-            Save as meal to Library after logging
-          </label>
-          <Input
-            v-if="saveToLibrary"
-            :model-value="libraryName"
-            placeholder="Meal name"
-            @update:modelValue="onLibraryNameInput"
-          />
-        </div>
-
-        <div
-          class="glass sticky bottom-2 grid grid-cols-1 gap-2 rounded-card p-3 sm:grid-cols-2"
-        >
-          <Button variant="ghost" @click="clearMealDraft">Cancel</Button>
-          <Button
-            :loading="isSaving"
-            :disabled="!canSaveLog"
-            @click="saveLogEntry"
-            >Save meal</Button
-          >
-        </div>
-      </template>
-
-      <div v-if="mode === 'library'" class="space-y-2">
-        <Input
-          :model-value="libraryName"
-          placeholder="Food name for library"
-          @update:modelValue="onLibraryNameInput"
-        />
-        <Button
-          class="w-full sm:w-auto"
-          :loading="isSaving"
-          @click="saveLibraryFromEstimate"
-          >Save to Library</Button
-        >
-      </div>
-    </Card>
-
-    <p
-      v-if="errorMessage"
-      class="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-    >
-      {{ errorMessage }}
-    </p>
-    <p
-      v-if="saveMessage"
-      class="rounded-xl border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary"
-    >
-      {{ saveMessage }}
-    </p>
+    </div>
 
     <div v-if="pendingDuplicate" class="dialog-overlay feature feature-add-log">
       <Card

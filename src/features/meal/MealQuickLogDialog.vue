@@ -3,9 +3,18 @@ import { computed, onMounted, ref } from "vue";
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import Input from "@/components/ui/Input.vue";
-import SelectField from "@/components/ui/SelectField.vue";
+import DialogSheet from "@/components/ui/DialogSheet.vue";
 import { enqueueRetry } from "@/db/offline-db";
-import { formatMacro, savedFoodMacrosForQuantity } from "@/lib/macros";
+import {
+  buildFoodEntryPayload,
+  buildLogItemFromSavedFood,
+  buildLogItemsFromSavedMeal,
+  MAX_LOG_ITEM_GRAMS,
+  macrosFromLogItem,
+  totalsFromLogItems,
+  type LogMealItem,
+} from "@/features/add-log/log-meal-service";
+import { defaultFoodGrams } from "@/features/library/library-helpers";
 import { parseNumberInput } from "@/lib/number";
 import { currentUserId } from "@/lib/supabase";
 import { foodEntryRepository } from "@/repositories/food-entry-repository";
@@ -13,272 +22,116 @@ import { savedFoodRepository } from "@/repositories/saved-food-repository";
 import { resolveActiveDateForLogging } from "@/services/active-date-service";
 import { syncDailySummaryForDate } from "@/services/day-summary-service";
 import { useActiveDayStore } from "@/stores/active-day-store";
-import type {
-  FoodEntry,
-  FoodEntryItem,
-  SavedFood,
-  SavedMealIngredient,
-} from "@/types/domain";
+import type { SavedFood } from "@/types/domain";
 
-interface EditableIngredient {
-  id: string;
-  name: string;
-  gramsText: string;
-  originalGrams: number;
-  originalCalories: number;
-  originalProtein: number;
-  originalCarbs: number;
-  originalFat: number;
-  linkedFoodId: string | null;
-}
-
-const props = defineProps<{
-  meal: SavedFood;
-}>();
-
-const emit = defineEmits<{
-  close: [];
-  saved: [];
-}>();
-const activeDayStore = useActiveDayStore();
-
-const isLoading = ref(false);
+const props = defineProps<{ meal: SavedFood }>();
+const emit = defineEmits<{ close: []; saved: [queued: boolean] }>();
+const activeDay = useActiveDayStore();
+const logDate = activeDay.activeDate;
+const isLoading = ref(true);
 const isSaving = ref(false);
 const errorMessage = ref<string | null>(null);
-const ingredients = ref<EditableIngredient[]>([]);
-const nonMealFoods = ref<SavedFood[]>([]);
-const addIngredientFoodId = ref("");
-const addIngredientGrams = ref("100");
-
-const toEditable = (ingredient: SavedMealIngredient): EditableIngredient => ({
-  id: ingredient.id,
-  name: ingredient.name,
-  gramsText: formatMacro(ingredient.grams, 1),
-  originalGrams: ingredient.grams,
-  originalCalories: ingredient.calories,
-  originalProtein: ingredient.protein,
-  originalCarbs: ingredient.carbs,
-  originalFat: ingredient.fat,
-  linkedFoodId: ingredient.linked_food_id ?? null,
+const items = ref<LogMealItem[]>([]);
+const quantity = ref(
+  props.meal.is_meal ? "1" : String(defaultFoodGrams(props.meal)),
+);
+const scaledItems = computed(() => {
+  const amount = parseNumberInput(quantity.value) ?? 0;
+  return items.value.map((item) => ({
+    ...item,
+    gramsText: String(
+      props.meal.is_meal
+        ? (parseNumberInput(item.gramsText) ?? 0) * amount
+        : amount,
+    ),
+  }));
 });
-
-const gramsFor = (ingredient: EditableIngredient): number =>
-  parseNumberInput(ingredient.gramsText) ?? 0;
-const scaleFor = (ingredient: EditableIngredient): number => {
-  const grams = gramsFor(ingredient);
-  if (ingredient.originalGrams <= 0 || grams <= 0) return 0;
-  return grams / ingredient.originalGrams;
-};
-
-const totals = computed(() => {
-  return ingredients.value.reduce(
-    (acc, ingredient) => {
-      const scale = scaleFor(ingredient);
-      if (scale <= 0) return acc;
-      return {
-        calories: acc.calories + ingredient.originalCalories * scale,
-        protein: acc.protein + ingredient.originalProtein * scale,
-        carbs: acc.carbs + ingredient.originalCarbs * scale,
-        fat: acc.fat + ingredient.originalFat * scale,
-      };
-    },
-    { calories: 0, protein: 0, carbs: 0, fat: 0 },
-  );
-});
-
-const canSave = computed(() =>
-  ingredients.value.some((ingredient) => gramsFor(ingredient) > 0),
+const totals = computed(() => totalsFromLogItems(scaledItems.value));
+const canSave = computed(
+  () =>
+    !isLoading.value &&
+    (parseNumberInput(quantity.value) ?? 0) > 0 &&
+    scaledItems.value.length > 0 &&
+    scaledItems.value.every(
+      (item) =>
+        !item.isNutritionMissing &&
+        (parseNumberInput(item.gramsText) ?? 0) > 0 &&
+        (parseNumberInput(item.gramsText) ?? Infinity) <= MAX_LOG_ITEM_GRAMS,
+    ),
 );
 
 const loadData = async (): Promise<void> => {
   isLoading.value = true;
   errorMessage.value = null;
   try {
-    const [mealIngredients, nonMeal] = await Promise.all([
-      savedFoodRepository.fetchMealIngredients(props.meal.id),
-      savedFoodRepository.fetchNonMealFoods(),
-    ]);
-
-    ingredients.value = mealIngredients.map(toEditable);
-    nonMealFoods.value = nonMeal;
-    addIngredientFoodId.value = nonMeal[0]?.id ?? "";
-  } catch (error) {
-    errorMessage.value =
-      error instanceof Error ? error.message : "Unable to load ingredients.";
+    items.value = props.meal.is_meal
+      ? buildLogItemsFromSavedMeal(
+          await savedFoodRepository.fetchMealIngredients(props.meal.id),
+        )
+      : [buildLogItemFromSavedFood(props.meal, defaultFoodGrams(props.meal))];
+    if (
+      !items.value.length ||
+      items.value.some((item) => item.isNutritionMissing)
+    ) {
+      errorMessage.value =
+        "This item has missing nutrition. Choose another item from your library.";
+    }
+  } catch {
+    errorMessage.value = "Unable to load this meal. Try again.";
   } finally {
     isLoading.value = false;
   }
 };
-
-onMounted(() => {
-  void loadData();
-});
-
-const addIngredient = (): void => {
-  const selected = nonMealFoods.value.find(
-    (food) => food.id === addIngredientFoodId.value,
-  );
-  if (!selected) return;
-
-  const grams = parseNumberInput(addIngredientGrams.value);
-  if (!grams || grams <= 0) return;
-
-  const macros = savedFoodMacrosForQuantity(selected, grams);
-  ingredients.value.push({
-    id: crypto.randomUUID(),
-    name: selected.name,
-    gramsText: formatMacro(grams, 1),
-    originalGrams: grams,
-    originalCalories: macros.calories,
-    originalProtein: macros.protein,
-    originalCarbs: macros.carbs,
-    originalFat: macros.fat,
-    linkedFoodId: selected.id,
-  });
-};
-
-const removeIngredient = (id: string): void => {
-  ingredients.value = ingredients.value.filter(
-    (ingredient) => ingredient.id !== id,
-  );
-};
-
-const buildScaledMacros = (ingredient: EditableIngredient) => {
-  const scale = scaleFor(ingredient);
-  return {
-    calories: ingredient.originalCalories * scale,
-    protein: ingredient.originalProtein * scale,
-    carbs: ingredient.originalCarbs * scale,
-    fat: ingredient.originalFat * scale,
-  };
-};
+onMounted(loadData);
 
 const save = async (): Promise<void> => {
-  if (!canSave.value) {
-    errorMessage.value = "Add at least one ingredient with grams.";
-    return;
-  }
-
+  if (!canSave.value || isSaving.value) return;
   isSaving.value = true;
   errorMessage.value = null;
-
   try {
     const userId = await currentUserId();
-    const entryId = crypto.randomUUID();
-    const activeDate = await resolveActiveDateForLogging(
+    const activeDate = await resolveActiveDateForLogging(userId, logDate);
+    const payload = buildFoodEntryPayload({
+      entryId: crypto.randomUUID(),
       userId,
-      activeDayStore.activeDate,
-    );
-
-    const entry: FoodEntry = {
-      id: entryId,
-      user_id: userId,
-      date: activeDate,
-      input_type: "text",
-      input_text: props.meal.name,
-      image_path: null,
-      calories: totals.value.calories,
-      protein: totals.value.protein,
-      carbs: totals.value.carbs,
-      fat: totals.value.fat,
-      ai_confidence: null,
-      ai_source: "library",
-      ai_notes: "Logged from saved meal",
-      created_at: null,
-    };
-
-    const items: FoodEntryItem[] = ingredients.value
-      .map((ingredient) => {
-        const grams = gramsFor(ingredient);
-        if (grams <= 0) return null;
-        const scaled = buildScaledMacros(ingredient);
-        return {
-          id: crypto.randomUUID(),
-          entry_id: entryId,
-          user_id: userId,
-          name: ingredient.name,
-          grams,
-          calories: scaled.calories,
-          protein: scaled.protein,
-          carbs: scaled.carbs,
-          fat: scaled.fat,
-          ai_confidence: null,
-          ai_notes: "",
-          created_at: null,
-        } satisfies FoodEntryItem;
-      })
-      .filter(Boolean) as FoodEntryItem[];
-
-    await foodEntryRepository.insertFoodEntry(entry, items);
-    await syncDailySummaryForDate(activeDate);
-    emit("saved");
-    emit("close");
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to save entry.";
-    if (!navigator.onLine || message.toLowerCase().includes("network")) {
-      try {
-        const userId = await currentUserId();
-        const entryId = crypto.randomUUID();
-        const activeDate = await resolveActiveDateForLogging(
-          userId,
-          activeDayStore.activeDate,
-        );
-
-        const queuedEntry: FoodEntry = {
-          id: entryId,
-          user_id: userId,
-          date: activeDate,
-          input_type: "text",
-          input_text: props.meal.name,
-          image_path: null,
-          calories: totals.value.calories,
-          protein: totals.value.protein,
-          carbs: totals.value.carbs,
-          fat: totals.value.fat,
-          ai_confidence: null,
-          ai_source: "library",
-          ai_notes: "Logged from saved meal",
-          created_at: null,
-        };
-
-        const queuedItems: FoodEntryItem[] = ingredients.value
-          .map((ingredient) => {
-            const grams = gramsFor(ingredient);
-            if (grams <= 0) return null;
-            const scaled = buildScaledMacros(ingredient);
-            return {
-              id: crypto.randomUUID(),
-              entry_id: entryId,
-              user_id: userId,
-              name: ingredient.name,
-              grams,
-              calories: scaled.calories,
-              protein: scaled.protein,
-              carbs: scaled.carbs,
-              fat: scaled.fat,
-              ai_confidence: null,
-              ai_notes: "",
-              created_at: null,
-            } satisfies FoodEntryItem;
-          })
-          .filter(Boolean) as FoodEntryItem[];
-
+      activeDate,
+      imagePath: null,
+      items: scaledItems.value,
+      sources: { usedPhoto: false, usedText: false, usedLibrary: true },
+      isLabelPhoto: false,
+    });
+    payload.entry.input_text = props.meal.name;
+    let queued = false;
+    try {
+      await foodEntryRepository.insertFoodEntry(
+        payload.entry,
+        payload.entryItems,
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to log this item.";
+      if (!navigator.onLine || /network|fetch/i.test(message)) {
         await enqueueRetry("create_food_entry", {
-          entry: queuedEntry,
-          items: queuedItems,
+          entry: payload.entry,
+          items: payload.entryItems,
         });
-        emit("saved");
-        emit("close");
-        return;
-      } catch (queueError) {
-        errorMessage.value =
-          queueError instanceof Error ? queueError.message : message;
-        return;
+        queued = true;
+      } else throw error;
+    }
+    if (!queued) {
+      // An entry already saved must not be submitted again after a summary failure.
+      try {
+        await syncDailySummaryForDate(activeDate);
+      } catch {
+        /* Daily progress derives totals from the saved entries on refresh. */
       }
     }
-
-    errorMessage.value = message;
+    emit("saved", queued);
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error
+        ? error.message
+        : "Unable to log this item. Try again.";
   } finally {
     isSaving.value = false;
   }
@@ -286,111 +139,107 @@ const save = async (): Promise<void> => {
 </script>
 
 <template>
-  <div class="dialog-overlay feature feature-library">
+  <DialogSheet title="Log from Library" :busy="isSaving" @close="emit('close')">
     <Card
-      class="max-h-[88vh] w-full max-w-none overflow-y-auto rounded-t-card rounded-b-none p-3 sm:max-h-[92vh] sm:max-w-2xl sm:rounded-card sm:p-5"
+      class="feature feature-library flex max-h-[90dvh] w-full max-w-none flex-col gap-4 overflow-hidden rounded-t-card p-3 sm:max-w-xl sm:rounded-card sm:p-5"
     >
-      <div class="mb-4 flex items-center justify-between">
-        <div>
-          <h3 class="text-lg font-semibold">Log Meal</h3>
-          <p class="text-sm text-muted-foreground">{{ meal.name }}</p>
+      <header class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="break-words text-lg font-semibold">{{ meal.name }}</h2>
+          <p class="text-xs text-muted-foreground">Logging for {{ logDate }}</p>
         </div>
-        <Button variant="ghost" size="sm" @click="emit('close')">Close</Button>
-      </div>
-
-      <div
-        v-if="isLoading"
-        class="py-8 text-center text-sm text-muted-foreground"
-      >
-        Loading...
-      </div>
-
-      <template v-else>
-        <div class="space-y-3">
-          <article
-            v-for="ingredient in ingredients"
-            :key="ingredient.id"
-            class="glass space-y-2 rounded-card p-3"
-          >
-            <div class="flex items-start justify-between gap-2">
-              <h4 class="text-sm font-semibold">{{ ingredient.name }}</h4>
-              <Button
-                variant="ghost"
-                size="sm"
-                @click="removeIngredient(ingredient.id)"
-                >Remove</Button
-              >
-            </div>
-            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <Button variant="ghost" :disabled="isSaving" @click="emit('close')"
+          >Close</Button
+        >
+      </header>
+      <div class="min-h-0 flex-1 space-y-3 overflow-y-auto">
+        <p v-if="isLoading" role="status">Loading meal…</p>
+        <template v-else-if="items.length">
+          <label for="library-log-quantity" class="block text-sm font-medium">{{
+            meal.is_meal ? "Portions of the saved meal" : "Quantity (g)"
+          }}</label>
+          <Input
+            id="library-log-quantity"
+            v-model="quantity"
+            type="number"
+            inputmode="decimal"
+            min="0.1"
+            :max="meal.is_meal ? undefined : '5000'"
+            step="0.1"
+            :disabled="isSaving"
+          />
+          <p class="text-sm font-semibold tabular-nums">
+            {{ Math.round(totals.calories) }} kcal · P
+            {{ Math.round(totals.protein) }}g · C
+            {{ Math.round(totals.carbs) }}g · F {{ Math.round(totals.fat) }}g
+          </p>
+          <details v-if="meal.is_meal">
+            <summary
+              class="flex min-h-11 cursor-pointer items-center text-sm font-medium"
+            >
+              Adjust ingredients
+            </summary>
+            <div
+              v-for="item in items"
+              :key="item.id"
+              class="flex items-center gap-3 border-t border-border/40 py-2"
+            >
+              <div class="min-w-0 flex-1">
+                <p class="break-words text-sm">{{ item.name }}</p>
+                <p class="text-xs text-muted-foreground">
+                  {{ Math.round(macrosFromLogItem(item).calories) }} kcal per
+                  saved portion
+                </p>
+              </div>
               <Input
-                v-model="ingredient.gramsText"
+                v-model="item.gramsText"
+                class="w-24"
                 type="number"
-                min="0"
+                inputmode="decimal"
+                min="0.1"
                 step="0.1"
-                placeholder="Grams"
+                :disabled="isSaving"
+                :aria-label="`Grams per saved portion for ${item.name}`"
               />
-              <p
-                class="rounded-thumb border border-white/50 bg-white/40 px-3 py-2 text-xs text-muted-foreground dark:border-border/20 dark:bg-card/30"
-              >
-                {{ Math.round(buildScaledMacros(ingredient).calories) }} kcal ·
-                P{{ Math.round(buildScaledMacros(ingredient).protein) }} · C{{
-                  Math.round(buildScaledMacros(ingredient).carbs)
-                }}
-                · F{{ Math.round(buildScaledMacros(ingredient).fat) }}
-              </p>
             </div>
-          </article>
-        </div>
-
-        <div
-          class="glass mt-4 space-y-2 rounded-card p-3"
-        >
-          <h4 class="text-sm font-semibold">Add ingredient</h4>
-          <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <SelectField v-model="addIngredientFoodId">
-              <option
-                v-for="food in nonMealFoods"
-                :key="food.id"
-                :value="food.id"
-              >
-                {{ food.name }}
-              </option>
-            </SelectField>
-            <Input
-              v-model="addIngredientGrams"
-              type="number"
-              min="0"
-              step="0.1"
-              placeholder="Grams"
-            />
-            <Button variant="secondary" @click="addIngredient">Add</Button>
-          </div>
-        </div>
-
-        <div
-          class="mt-4 rounded-thumb border border-white/50 bg-white/40 p-3 text-sm dark:border-border/20 dark:bg-card/30"
-        >
-          Total: {{ formatMacro(totals.calories, 1) }} kcal · P{{
-            formatMacro(totals.protein, 1)
-          }}g · C{{ formatMacro(totals.carbs, 1) }}g · F{{
-            formatMacro(totals.fat, 1)
-          }}g
-        </div>
-
+          </details>
+        </template>
         <p
-          v-if="errorMessage"
-          class="mt-3 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          v-if="
+            scaledItems.some(
+              (item) =>
+                (parseNumberInput(item.gramsText) ?? 0) > MAX_LOG_ITEM_GRAMS,
+            )
+          "
+          role="alert"
+          class="text-sm text-destructive"
         >
+          Reduce the quantity to {{ MAX_LOG_ITEM_GRAMS }}g or less per
+          ingredient.
+        </p>
+        <p v-if="errorMessage" role="alert" class="text-sm text-destructive">
           {{ errorMessage }}
         </p>
-
-        <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <Button :loading="isSaving" :disabled="!canSave" @click="save"
-            >Save log</Button
-          >
-          <Button variant="ghost" @click="emit('close')">Cancel</Button>
-        </div>
-      </template>
+        <Button
+          v-if="!items.length && !isLoading"
+          variant="secondary"
+          class="w-full"
+          @click="loadData"
+          >Try again</Button
+        >
+      </div>
+      <div
+        class="glass shrink-0 rounded-card p-2 pb-[max(env(safe-area-inset-bottom),0.5rem)]"
+      >
+        <Button
+          class="w-full"
+          :disabled="!canSave"
+          :loading="isSaving"
+          @click="save"
+          >Log {{ meal.is_meal ? "meal" : "food" }} ·
+          {{ Math.round(totals.calories) }} kcal</Button
+        >
+      </div>
     </Card>
-  </div>
+  </DialogSheet>
 </template>

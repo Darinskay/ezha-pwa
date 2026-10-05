@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { BookMarked, Lightbulb, Plus, Settings, Sun } from "lucide-vue-next";
+import DialogSheet from "@/components/ui/DialogSheet.vue";
 import DayNavigator from "@/components/DayNavigator.vue";
 import AddLogPage from "@/features/add-log/AddLogPage.vue";
 import LogMealLibrarySelectPage from "@/features/add-log/LogMealLibrarySelectPage.vue";
@@ -28,6 +29,10 @@ const showDayNavigator = computed(
   () => route.name === "today" || route.name === "suggestions",
 );
 const isLogDialogOpen = ref(false);
+const logBusy = ref(false);
+const logDate = ref(activeDayStore.activeDate);
+const logPanel = ref<InstanceType<typeof AddLogPage> | null>(null);
+const logMessage = ref("");
 const logDialogStep = ref<"log" | "library-select">("log");
 
 let dayBoundaryTimer: ReturnType<typeof window.setInterval> | null = null;
@@ -54,13 +59,32 @@ const navigate = async (name: (typeof tabs)[number]["name"]): Promise<void> => {
 };
 
 const openLogDialog = (): void => {
+  logBusy.value = false;
+  logDate.value = activeDayStore.activeDate;
+  logMessage.value = "";
   logDialogStep.value = "log";
   isLogDialogOpen.value = true;
 };
 
-const closeLogDialog = (): void => {
+const closeLogDialog = async (): Promise<void> => {
+  if (logBusy.value) return;
+  if (logPanel.value && !(await logPanel.value.persistDraft())) return;
   isLogDialogOpen.value = false;
   logDialogStep.value = "log";
+};
+
+const onMealLogged = async (
+  _route: string,
+  queued: boolean,
+  notice: string,
+): Promise<void> => {
+  isLogDialogOpen.value = false;
+  logDialogStep.value = "log";
+  logMessage.value = queued
+    ? "Saved on this device. Your totals will update after syncing."
+    : "Meal logged.";
+  if (notice) logMessage.value += ` ${notice}`;
+  await router.push({ name: "today" });
 };
 
 const openLibrarySelector = (): void => {
@@ -68,6 +92,7 @@ const openLibrarySelector = (): void => {
 };
 
 const returnToLogDialog = (): void => {
+  logBusy.value = false;
   logDialogStep.value = "log";
 };
 </script>
@@ -82,6 +107,9 @@ const returnToLogDialog = (): void => {
         :model-value="activeDayStore.activeDate"
         @update:modelValue="activeDayStore.setActiveDate"
       />
+      <p v-if="logMessage" role="status" class="mx-3 mt-3 text-sm text-primary">
+        {{ logMessage }}
+      </p>
       <RouterView />
     </main>
 
@@ -103,6 +131,7 @@ const returnToLogDialog = (): void => {
               v-for="tab in leftTabs"
               :key="tab.name"
               :aria-label="tab.label"
+              :aria-current="route.name === tab.name ? 'page' : undefined"
               class="group relative z-10 flex min-h-12 flex-col items-center justify-center gap-1 rounded-full px-0.5 py-0 text-[10px] font-semibold transition-all duration-300 sm:min-h-14 sm:px-1 sm:py-0 sm:text-[11px]"
               :class="
                 cn(
@@ -150,6 +179,7 @@ const returnToLogDialog = (): void => {
               v-for="tab in rightTabs"
               :key="tab.name"
               :aria-label="tab.label"
+              :aria-current="route.name === tab.name ? 'page' : undefined"
               class="group relative z-10 flex min-h-12 flex-col items-center justify-center gap-1 rounded-full px-0.5 py-0 text-[10px] font-semibold transition-all duration-300 sm:min-h-14 sm:px-1 sm:py-0 sm:text-[11px]"
               :class="
                 cn(
@@ -175,28 +205,32 @@ const returnToLogDialog = (): void => {
       </div>
     </nav>
 
-    <Transition name="meal-dialog">
-      <div
-        v-if="isLogDialogOpen"
-        class="dialog-overlay feature feature-add-log"
-      >
-        <AddLogPage
-          v-if="logDialogStep === 'log'"
-          class="meal-dialog-panel"
-          embedded
-          initial-mode="log"
-          :date="activeDayStore.activeDate"
-          @close="closeLogDialog"
-          @saved="closeLogDialog"
-          @select-library="openLibrarySelector"
-        />
-        <LogMealLibrarySelectPage
-          v-else
-          class="meal-dialog-panel"
-          embedded
-          @done="returnToLogDialog"
-        />
-      </div>
-    </Transition>
+    <DialogSheet
+      v-if="isLogDialogOpen"
+      :title="logDialogStep === 'log' ? 'Log meal' : 'Add from Library'"
+      :busy="logBusy"
+      @close="closeLogDialog"
+    >
+      <AddLogPage
+        ref="logPanel"
+        v-if="logDialogStep === 'log'"
+        class="meal-dialog-panel"
+        embedded
+        initial-mode="log"
+        :date="logDate"
+        @close="closeLogDialog"
+        @saved="onMealLogged"
+        @busy-change="logBusy = $event"
+        @select-library="openLibrarySelector"
+      />
+      <LogMealLibrarySelectPage
+        v-else
+        class="meal-dialog-panel"
+        embedded
+        :date="logDate"
+        @done="returnToLogDialog"
+        @busy-change="logBusy = $event"
+      />
+    </DialogSheet>
   </div>
 </template>
